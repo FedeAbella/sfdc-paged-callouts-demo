@@ -16,7 +16,7 @@ complete_response = {
 def get_complete_data():
     return complete_response, 200
 
-@app.route('/partial', method=['GET'])
+@app.route('/partial', methods=['GET'])
 def get_partial_data():
     partial_data = df[:1000].to_dict('records')
     return {
