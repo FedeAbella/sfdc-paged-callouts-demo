@@ -5,7 +5,7 @@ import pandas as pd
 app = Flask(__name__)
 api = Api(app)
 
-df = pd.read_csv('data-api/data_complete.csv')
+df = pd.read_csv('data_complete.csv')
 full_data = df.to_dict('records')
 full_response= {
     'data':full_data
