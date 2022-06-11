@@ -1,1 +1,1 @@
-web: gunicorn data-api/queueable:app
+web: gunicorn --pythonpath data-api queueable:app
