@@ -27,5 +27,9 @@ def get_partial_data():
 def get_paged_data():
     pass
 
+@app.route('/')
+def index():
+    return '<h1>This is empty...</h1>\n<p>(...yeah, I know)</p>'
+
 if __name__ == '__main__':
     app.run()
