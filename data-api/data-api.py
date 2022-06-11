@@ -7,15 +7,9 @@ app = Flask(__name__)
 api = Api(app)
 
 df = pd.read_csv('data_complete.csv')
-<<<<<<< HEAD
-full_data = df.to_dict('records')
-full_response= {
-    'data':full_data
-=======
 complete_data = df.to_dict('records')
 complete_response = {
     'data':complete_data
->>>>>>> data-api
 }
 
 @app.route('/complete', methods=['GET'])
