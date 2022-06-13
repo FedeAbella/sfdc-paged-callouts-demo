@@ -111,17 +111,28 @@ def get_random_data():
 @app.route('/paged', methods=['GET'])
 def get_paged_data():
     """
-
+    Returns a paged portion of the data. Takes in two required, positive
+    integer parameters: 'start' and 'end', with 'end' >= 'start'. Returns all
+    rows between 'start' and 'end' (included) as a list in the 'data' key. 
+    First row is numbered 1. If 'start' is larger than the dataset size, 
+    returns an empty list in the key. If 'end' is larger than the dataset size,
+    returns as much as possible. If any parameter is missing or not valid, 
+    returns 400 and an error message.
     """
+
+    # get the 'start' and 'end' parameters
     start = request.args.get('start', None)
     end = request.args.get('end', None)
 
     response = {}
+
+    # check both parameters are present
     if not start or not end:
         response['success'] = False
         response['error'] = "Both a 'start' and 'end' parameters are required."
         return jsonify(response), 400
 
+    # check both parameters are valid
     if not start.isdigit() or \
         not end.isdigit() or \
         int(start) == 0 or \
@@ -132,6 +143,8 @@ def get_paged_data():
         return jsonify(response), 400
 
     start, end = int(start), int(end)
+
+    # check 'start' is not larger than 'end'
     if end < start:
         response['sucess'] = False
         response['error'] = "'start' cannot be larger than 'end'."
@@ -139,23 +152,28 @@ def get_paged_data():
     
     response['success'] = True
     response['data'] = []
+
+    # return an empty list if 'start' larger than dataset size
     if start > total_rows:
         return jsonify(response), 200
-    
+    # return the appropriate row if both 'start' and 'end' are the same
     if start == end:
         response['data'] = df.iloc[[start-1]].to_dict('records')
         return jsonify(response), 200
-    
+    # return the remaining rows if 'end' is larger than dataset size
     if end > total_rows:
         response['data'] = df[start-1:].to_dict('records')
         return jsonify(response), 200
-
+    # return the dataframe splice between 'start' and 'end'
     response['data'] = df[start-1:end].to_dict('records')
     return jsonify(response), 200
 
 @app.route('/')
 def index():
+    """
+    Root url index page. Just some simple placeholder html.
+    """
     return '<h1>This is empty...</h1>\n<p>(...yeah, I know)</p>'
 
 if __name__ == '__main__':
-    app.run()
+    app.run() # run the app
