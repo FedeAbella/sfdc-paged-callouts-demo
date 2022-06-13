@@ -31,11 +31,9 @@ total_rows = df.shape[0]
 
 # pre-export complete dataset for faster loading of /complete
 complete_dataset = df.to_dict('records')
-complete_response = jsonify(
-    {
+complete_response = {
         'data': complete_dataset
     }
-)
 
 # map the values of the size parameter to the percentage of rows returned
 partial_sizes = {
@@ -49,7 +47,8 @@ def get_complete_data():
     """
     Returns the complete dataset as a JSON with the 'data' key containing it
     """
-    return complete_response, 200
+    complete_response['success'] = True
+    return jsonify(complete_response), 200
 
 @app.route('/partial', methods=['GET'])
 def get_partial_data():
@@ -65,12 +64,14 @@ def get_partial_data():
     size = request.args.get('size', 'small')
     if size not in partial_sizes.keys():
         # if passed the wrong parameter, return 400 and error message
+        response['success'] = False
         response['error'] = "'size' parameter takes only values 'small',"\
-            " 'medium' or 'large'"
+            " 'medium' or 'large'."
         return jsonify(response), 400
 
     # calculate number of rows to return, and default 'data' key to empty
     rows_to_return = math.floor( total_rows * partial_sizes.get(size) )
+    response['success'] = True
     response['data'] = []
     # if there's anything to return, overwrite the 'data' key with those rows
     if rows_to_return > 0:
@@ -81,6 +82,9 @@ def get_partial_data():
 @app.route('/random', methods=['GET'])
 def get_random_data():
     """
+    Returns a random subset of data. Works the same as /partial, but instead
+    of taking the top portion of the data, it samples the appropriate amount of
+    rows and shuffles them before returning.
     """
     response = {}
 
@@ -88,12 +92,14 @@ def get_random_data():
     size = request.args.get('size', 'small')
     if size not in partial_sizes.keys():
         # if passed the wrong parameter, return 400 and error message
+        response['success'] = False
         response['error'] = "'size' parameter takes only values 'small',"\
-            " 'medium' or 'large'"
+            " 'medium' or 'large'."
         return jsonify(response), 400
 
     # calculate number of rows to return, and default 'data' key to empty
     rows_to_return = math.floor( total_rows * partial_sizes.get(size) )
+    response['success'] = True
     response['data'] = []
     # if there's anything to return, get a random sample of data and use that
     if rows_to_return > 0:
@@ -104,7 +110,48 @@ def get_random_data():
 
 @app.route('/paged', methods=['GET'])
 def get_paged_data():
-    pass
+    """
+
+    """
+    start = request.args.get('start', None)
+    end = request.args.get('end', None)
+
+    response = {}
+    if not start or not end:
+        response['success'] = False
+        response['error'] = "Both a 'start' and 'end' parameters are required."
+        return jsonify(response), 400
+
+    if not start.isdigit() or \
+        not end.isdigit() or \
+        int(start) == 0 or \
+        int(end) == 0:
+        response['success'] = False
+        response['error'] = "'start' and 'end' parameters must be" \
+            " positive integers."
+        return jsonify(response), 400
+
+    start, end = int(start), int(end)
+    if end < start:
+        response['sucess'] = False
+        response['error'] = "'start' cannot be larger than 'end'."
+        return jsonify(response), 400
+    
+    response['success'] = True
+    response['data'] = []
+    if start > total_rows:
+        return jsonify(response), 200
+    
+    if start == end:
+        response['data'] = df.iloc[[start-1]].to_dict('records')
+        return jsonify(response), 200
+    
+    if end > total_rows:
+        response['data'] = df[start-1:].to_dict('records')
+        return jsonify(response), 200
+
+    response['data'] = df[start-1:end].to_dict('records')
+    return jsonify(response), 200
 
 @app.route('/')
 def index():
