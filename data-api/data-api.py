@@ -20,11 +20,9 @@ Endpoints:
         as it can.
     /: Just a simple html index page, to avoid 404.
 """
-
-import json
 from flask import Flask, request, jsonify
 import pandas as pd
-import math, random
+import math
 
 app = Flask(__name__) # define the Flask app
 
@@ -84,7 +82,6 @@ def get_partial_data():
 def get_random_data():
     """
     """
-
     response = {}
 
     # check for the right parameter value, or none passed (default to small)
