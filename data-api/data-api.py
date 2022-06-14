@@ -21,13 +21,13 @@ Endpoints:
     /: Just a simple html index page, to avoid 404.
 """
 from flask import Flask, request, jsonify
-from pandas import DataFrame
+from pandas import read_csv
 from math import floor
 from json import dumps
 
 app = Flask(__name__) # define the Flask app
 
-DATASET = DataFrame.read_csv('data_complete.csv') # read the csv data into pandas dataframe
+DATASET = read_csv('data_complete.csv') # read the csv data into pandas dataframe
 TOTAL_ROWS = DATASET.shape[0]
 
 # pre-export complete dataset for faster loading of /complete
