@@ -21,22 +21,25 @@ Endpoints:
     /: Just a simple html index page, to avoid 404.
 """
 from flask import Flask, request, jsonify
-import pandas as pd
-import math
+from pandas import DataFrame
+from math import floor
+from json import dumps
 
 app = Flask(__name__) # define the Flask app
 
-df = pd.read_csv('data_complete.csv') # read the csv data into pandas dataframe
-total_rows = df.shape[0]
+DATASET = DataFrame.read_csv('data_complete.csv') # read the csv data into pandas dataframe
+TOTAL_ROWS = DATASET.shape[0]
 
 # pre-export complete dataset for faster loading of /complete
-complete_dataset = df.to_dict('records')
-complete_response = {
-        'data': complete_dataset
+COMPLETE_RESPONSE = dumps(
+    {
+        'success': True,
+        'data': DATASET.to_dict('records')
     }
+)
 
 # map the values of the size parameter to the percentage of rows returned
-partial_sizes = {
+PARTIAL_SIZES = {
     'small': 0.001,
     'medium': 0.01,
     'large': 0.1
@@ -47,8 +50,7 @@ def get_complete_data():
     """
     Returns the complete dataset as a JSON with the 'data' key containing it
     """
-    complete_response['success'] = True
-    return jsonify(complete_response), 200
+    return COMPLETE_RESPONSE, 200
 
 @app.route('/partial', methods=['GET'])
 def get_partial_data():
@@ -62,7 +64,7 @@ def get_partial_data():
 
     # check for the right parameter value, or none passed (default to small)
     size = request.args.get('size', 'small')
-    if size not in partial_sizes.keys():
+    if size not in PARTIAL_SIZES.keys():
         # if passed the wrong parameter, return 400 and error message
         response['success'] = False
         response['error'] = "'size' parameter takes only values 'small',"\
@@ -70,12 +72,12 @@ def get_partial_data():
         return jsonify(response), 400
 
     # calculate number of rows to return, and default 'data' key to empty
-    rows_to_return = math.floor( total_rows * partial_sizes.get(size) )
+    rows_to_return = floor( TOTAL_ROWS * PARTIAL_SIZES.get(size) )
     response['success'] = True
     response['data'] = []
     # if there's anything to return, overwrite the 'data' key with those rows
     if rows_to_return > 0:
-        response['data'] = df[:rows_to_return].to_dict('records')
+        response['data'] = DATASET[:rows_to_return].to_dict('records')
 
     return jsonify(response), 200
 
@@ -90,7 +92,7 @@ def get_random_data():
 
     # check for the right parameter value, or none passed (default to small)
     size = request.args.get('size', 'small')
-    if size not in partial_sizes.keys():
+    if size not in PARTIAL_SIZES.keys():
         # if passed the wrong parameter, return 400 and error message
         response['success'] = False
         response['error'] = "'size' parameter takes only values 'small',"\
@@ -98,12 +100,12 @@ def get_random_data():
         return jsonify(response), 400
 
     # calculate number of rows to return, and default 'data' key to empty
-    rows_to_return = math.floor( total_rows * partial_sizes.get(size) )
+    rows_to_return = floor( TOTAL_ROWS * PARTIAL_SIZES.get(size) )
     response['success'] = True
     response['data'] = []
     # if there's anything to return, get a random sample of data and use that
     if rows_to_return > 0:
-        response['data'] = df.sample(rows_to_return).to_dict('records')
+        response['data'] = DATASET.sample(rows_to_return).to_dict('records')
 
     return jsonify(response), 200
 
@@ -154,18 +156,18 @@ def get_paged_data():
     response['data'] = []
 
     # return an empty list if 'start' larger than dataset size
-    if start > total_rows:
+    if start > TOTAL_ROWS:
         return jsonify(response), 200
     # return the appropriate row if both 'start' and 'end' are the same
     if start == end:
-        response['data'] = df.iloc[[start-1]].to_dict('records')
+        response['data'] = DATASET.iloc[[start-1]].to_dict('records')
         return jsonify(response), 200
     # return the remaining rows if 'end' is larger than dataset size
-    if end > total_rows:
-        response['data'] = df[start-1:].to_dict('records')
+    if end > TOTAL_ROWS:
+        response['data'] = DATASET[start-1:].to_dict('records')
         return jsonify(response), 200
     # return the dataframe splice between 'start' and 'end'
-    response['data'] = df[start-1:end].to_dict('records')
+    response['data'] = DATASET[start-1:end].to_dict('records')
     return jsonify(response), 200
 
 @app.route('/')
