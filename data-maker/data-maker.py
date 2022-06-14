@@ -7,7 +7,7 @@ from faker import Faker
 import random
 import csv
 
-num_records = 1_000_000 # number of records to create
+num_records = 250_000 # number of records to create
 columns = ['id', 'name', 'job', 'company'] # column names
 
 fake = Faker() # instatiate Faker
