@@ -1,1 +1,1 @@
-web: gunicorn data-api:app --max-requests 10 --workers 2
+web: gunicorn data-api:app --max-requests 1 --workers 1
