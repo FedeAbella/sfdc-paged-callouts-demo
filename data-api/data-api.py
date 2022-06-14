@@ -21,21 +21,12 @@ Endpoints:
     /: Just a simple html index page, to avoid 404.
 """
 from flask import Flask, request, jsonify
-from pandas import read_csv
 from math import floor
+from dataset import DATASET
 
 app = Flask(__name__) # define the Flask app
 
-DATASET = read_csv('data_complete.csv') # read the csv data into pandas dataframe
 TOTAL_ROWS = DATASET.shape[0]
-
-# pre-export complete dataset for faster loading of /complete
-# COMPLETE_RESPONSE = dumps(
-#     {
-#         'success': True,
-#         'data': DATASET.to_dict('records')
-#     }
-# )
 
 # map the values of the size parameter to the percentage of rows returned
 PARTIAL_SIZES = {
