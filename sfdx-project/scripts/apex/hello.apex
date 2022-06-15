@@ -10,5 +10,6 @@
 //     System.debug(c);
 // }
 
-GetCandidatesBatch job = new GetCandidatesBatch('complete', null);
-Database.executeBatch(job);
+// GetCandidatesBatch job = new GetCandidatesBatch('complete', null);
+// Database.executeBatch(job);
+System.debug(Candidate__c.Fields.External_ID__c);
