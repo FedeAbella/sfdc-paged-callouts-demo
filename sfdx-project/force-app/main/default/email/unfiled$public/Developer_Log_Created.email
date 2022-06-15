@@ -1,0 +1,8 @@
+A new log was created:
+
+Name: {!Developer_Log__c.Name}
+Type: {!Developer_Log__c.Type__c}
+Created On: {!Developer_Log__c.CreatedDate}
+Created By: {!Developer_Log__c.CreatedBy}
+
+Message: {!Developer_Log__c.Message__c}
