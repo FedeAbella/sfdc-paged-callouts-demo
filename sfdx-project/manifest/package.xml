@@ -1,36 +1,82 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Full metadata download</fullName>
     <types>
-        <members>*</members>
+        <members>CandidatesCallout</members>
+        <members>DeveloperLogHandler</members>
+        <members>GetCandidatesBatch</members>
+        <members>GetCandidatesPagedQueueable</members>
+        <members>GetCandidatesPagedQueueableScheduler</members>
         <name>ApexClass</name>
     </types>
     <types>
-        <members>*</members>
-        <name>ApexComponent</name>
+        <members>Candidate_Management</members>
+        <name>CustomApplication</name>
     </types>
     <types>
-        <members>*</members>
-        <name>ApexPage</name>
+        <members>Callout_Setting__mdt.Base_URL__c</members>
+        <members>Callout_Setting__mdt.Delay_Between_Attempts__c</members>
+        <members>Callout_Setting__mdt.Max_Paged_Attempts__c</members>
+        <members>Candidate__c.Current_Company__c</members>
+        <members>Candidate__c.Current_Position__c</members>
+        <members>Candidate__c.External_ID__c</members>
+        <members>Developer_Log__c.Message__c</members>
+        <members>Developer_Log__c.Type__c</members>
+        <name>CustomField</name>
     </types>
     <types>
-        <members>*</members>
-        <name>ApexTestSuite</name>
+        <members>Callout_Setting.Heroku_Datasource</members>
+        <name>CustomMetadata</name>
     </types>
     <types>
-        <members>*</members>
-        <name>ApexTrigger</name>
+        <members>Callout_Setting__mdt</members>
+        <members>Candidate__c</members>
+        <members>Developer_Log__c</members>
+        <name>CustomObject</name>
     </types>
     <types>
-        <members>*</members>
-        <name>AuraDefinitionBundle</name>
+        <members>Candidate__c</members>
+        <members>Developer_Log__c</members>
+        <name>CustomTab</name>
     </types>
     <types>
-        <members>*</members>
-        <name>LightningComponentBundle</name>
+        <members>unfiled$public/Developer_Log_Created</members>
+        <name>EmailTemplate</name>
     </types>
     <types>
-        <members>*</members>
-        <name>StaticResource</name>
+        <members>Candidate_Management_UtilityBar</members>
+        <name>FlexiPage</name>
     </types>
-    <version>54.0</version>
+    <types>
+        <members>RTF_Developer_Log_After_Insert</members>
+        <name>Flow</name>
+    </types>
+    <types>
+        <members>Admins</members>
+        <name>Group</name>
+    </types>
+    <types>
+        <members>Callout_Setting__mdt-Callout Setting Layout</members>
+        <members>Candidate__c-Candidate Layout</members>
+        <members>Developer_Log__c-Developer Log Layout</members>
+        <name>Layout</name>
+    </types>
+    <types>
+        <members>Candidate__c.All</members>
+        <members>Developer_Log__c.All</members>
+        <name>ListView</name>
+    </types>
+    <types>
+        <members>Admin</members>
+        <name>Profile</name>
+    </types>
+    <types>
+        <members>Heroku_Datasource</members>
+        <name>RemoteSiteSetting</name>
+    </types>
+    <types>
+        <members>Developer_Log__c.New_Developer_Log_created</members>
+        <name>WorkflowAlert</name>
+    </types>
+    <version>53.0</version>
 </Package>

@@ -3,25 +3,33 @@
 * CandidatesCallout: Get Candidates from an external Heroku Datasource
 *
 *   Class for making a callout to receive Candidate__c records from an external Heroku Datasource.
-*   Callout is made using the getCandidates method.
+*   Callout is made using the getCandidates or getCandidatesPaged methods.
 *
 * Constructor: No constructor
 *
 * Methods:
-*     - private static List<Candidate__c> getCandidates(String mode, String size): Attempts a
+*     - public static List<Candidate__c> getCandidates(
+*           CandidatesCallout.Modes mode, CandidatesCallout.Sizes size) {}: Attempts a
 *           callout to the Heroku_Datasource endpoint given by 'mode' and 'size', and returns a list
 *           of Candidate__c objects from the response. Raises a CandidatesCalloutException if it
 *           encounters some error.
+*     - public static List<Candidate__c> getCandidatesPaged(Integer startFrom, Integer pageSize){}:
+*           Makes a callout to the paged Heroku Datasource endpoint, with startFrom and pageSize
+*           determining the range of data to request. Returns a list of Candidate__c objects built
+*           from the response. Raises a CandidatesCalloutException if it encounters some error.
+*     - private static makeCallout(String endpoint){}: Given the endpoint, makes the callout to
+*           retrieve Candidate data, and returns a list of Candidate__c objects built from it.
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @author         Federico Abella   <federico.abella@cloudgaia.com>
 * @modifiedBy     Federico Abella   <federico.abella@cloudgaia.com>
 * @maintainedBy   Federico Abella   <federico.abella@cloudgaia.com>
-* @version        1.0
+* @version        2.0
 * @created        2022-06-13
-* @modified       2022-06-13
+* @modified       2022-06-16
 * @systemLayer    Callouts/REST
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @changes
+*   2022-06-16 (v2.0): Added the getCandidatesPaged method. 
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┘
 */
 public class CandidatesCallout {
@@ -41,39 +49,65 @@ public class CandidatesCallout {
         public List<Map<String,String>> data;
     }
 
-    //  Allowed values for the 'mode' and 'size' parameters
-    private static Set<String> MODES = new Set<String>{'partial','random','complete'};
-    private static Set<String> SIZES = new Set<String>{'small','medium','large'};
+    //  Allowed values for the 'mode' and 'size' parameters on the non-paged endpoints
+    public Enum Modes {PARTIAL, RANDOM, COMPLETE}
+    public Enum Sizes {SMALL, MEDIUM, LARGE}
 
-    public static List<Candidate__c> getCandidates(String mode, String size) {
+    /*
+    * Gets Candidate objects from a non-paged Heroku endpoint, using parameters 'mode' and 'size'
+    * to define the correct endpoint to call
+    */
+    public static List<Candidate__c> getCandidates(Modes mode, Sizes size) {
 
-        //  Check for validity of parameters. 'size' is also allowed to be blank.
-        if (!MODES.contains(mode) ||
-            (
-                String.isNotBlank(size) &&
-                !SIZES.contains(size)
-            )
-        ){
-            throw new CandidatesCalloutException('mode or size is invalid');
+        //  Verify required argument, and default size to small if not present
+        if (mode == null) {
+            throw new CandidatesCalloutException('mode is a required argument');
         }
+        String modeArg = mode.name().toLowerCase();
+        String sizeArg = (size == null) ? 'small' : size.name().toLowerCase();
 
-        //  Get the Heroku_Datasource base URL
-        NamedCredential credential = [
-            SELECT Endpoint
-            FROM NamedCredential
-            WHERE DeveloperName = 'Heroku_Datasource'
-        ];
-
+        //  Get the base URL for the Callout
+        String baseURL = Callout_Setting__mdt.getInstance('Heroku_Datasource').Base_URL__c;
         //  Complete the endpoint using the base URL + mode + size parameter if necessary
-        String endpoint = credential.Endpoint //  Get the base URL
-                        + mode //  Add the mode
+        String endpoint = baseURL //  Get the base URL
+                        + modeArg //  Add the mode
                         + (
-                            mode == 'complete' ? '' : ( //  If mode is complete, don't add parameter
-                                String.isBlank(size) ? '?size=small' : ('?size=' + size)
-                                //  Otherwise, add size parameter, or default to small
-                            )
+                            (modeArg == 'complete') ? '' : '?size=' + sizeArg
                         );
+                        //  If mode is not complete, add the size parameter
 
+        //  Make the callout and return the result
+        return makeCallout(endpoint);
+    }
+
+    /*
+    * Gets Candidate objects from a paged Heroku endpoint, using parameters startingElement and
+    * pageSize to define which set of objects to retrieve
+    */
+    public static List<Candidate__c> getCandidatesPaged(Integer startFrom, Integer pageSize) {
+
+        //  Define the start and end parameter values
+        String startParam = String.valueOf(startFrom);
+        String endParam = String.valueOf(startFrom + pageSize - 1);
+
+        //  Get the base URL for the callout
+        String baseURL = Callout_Setting__mdt.getInstance('Heroku_Datasource').Base_URL__c;
+        //  Build the full endpoint using the base URL + paged endpoint + start + end parameters
+        String endpoint = baseURL //  base URL
+            + 'paged' //  paged endpoint
+            + '?start=' + startParam //  start parameter
+            + '&end=' + endParam; //  end parameter
+
+        //  Make the callout and return the result
+        return makeCallout(endpoint);
+    }
+
+    /*
+    * Make the callout to the Heroku Datasource, given the right endpoint. The endpoint only
+    * determines the set of data to return, so callouts are the same across paged and non-paged
+    * methods, differing only on the endpoint used
+    */
+    private static List<Candidate__c> makeCallout(String endpoint) {
         //  Prepare the request
         Http http = new Http();
         HttpRequest request = new HttpRequest();

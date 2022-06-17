@@ -4,7 +4,7 @@
     <description>The candidate&apos;s current position at their company</description>
     <externalId>false</externalId>
     <label>Current Position</label>
-    <length>50</length>
+    <length>100</length>
     <required>false</required>
     <trackTrending>false</trackTrending>
     <type>Text</type>

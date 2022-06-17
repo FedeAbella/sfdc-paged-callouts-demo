@@ -9,7 +9,7 @@
 *
 * Methods:
 *     - public static void createDevLog(
-*           DeveloperLogHandler.LOGTYPE type, String name, String message
+*           DeveloperLogHandler.LogType type, String name, String message
 *       )
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @author         Federico Abella   <federico.abella@cloudgaia.com>
@@ -25,9 +25,9 @@
 */
 public class DeveloperLogHandler {
     
-    public Enum LOGTYPE {INFO, WARNING, ERROR}
+    public Enum LogType {INFO, WARNING, ERROR}
 
-    public static void createDevLog(LOGTYPE type, String name, String message){
+    public static void createDevLog(LogType type, String name, String message){
         insert new Developer_Log__c(
             Name = name,
             Type__c = type.name(),

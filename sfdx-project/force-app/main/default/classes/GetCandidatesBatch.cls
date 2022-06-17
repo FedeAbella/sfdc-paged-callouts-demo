@@ -2,13 +2,15 @@
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┐
 * GetCandidatesBatch: Batchable class for upserting Candidates from Heroku endpoint via External ID
 *
-*   Full description
+*   Batch Apex class for getting Candidates from a Heroku endpoint. The endpoint is defined by the
+*       parameters mode and size, which determines the amount of records the endpoint returns.
+*       The callout that gets the records is made on the start method, and those are upserted using
+*       the External_ID__c field in the execute method in batches. Class variables are used to keep
+*       running totals and errors across batches, which are then informed in the finish method.
 *
 * Constructor:
-*     - <Insert constructor here>
-*
-* Methods:
-*     - <Insert methods here>
+*     - public GetCandidatesBatch(
+*           CandidatesCallout.Modes mode, CandidatesCallout.Sizes size)
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @author         Federico Abella   <federico.abella@cloudgaia.com>
 * @modifiedBy     Federico Abella   <federico.abella@cloudgaia.com>
@@ -24,34 +26,53 @@
 public class GetCandidatesBatch implements Database.Batchable<sObject>, Database.Stateful, 
     Database.AllowsCallouts
 {
-    
-    private final String mode;
-    private final String size;
-    private Integer receivedCandidates;
-    private Integer upsertedCandidates;
-    private Integer insertedCandidates;
-    private Integer updatedCandidates;
-    private String upsertErrors;
 
+    //  INSTANCE VARIABLES
+    /*
+    * These are used for dynamically defining the correct endpoint to make the callout to.
+    * The endpoint is constructed using a base URL stored in Named Credentials, plus a 'mode' page
+    * plus a 'size' (optional) url argument
+    */
+    private final CandidatesCallout.Modes mode; //  Callout mode, used to define the final endpoint
+    private final CandidatesCallout.Sizes size; //  Callout size, used to define the final endpoint
 
-    public GetCandidatesBatch(String mode, String size) {
+    /*
+    * These are used to keeping track of the job across all instances of the execute method.
+    * That way we can, at the end of the entire job, create an informational log with accumulated
+    * data.
+    */
+    private Integer receivedCandidates; //  Keeps track of total received candidate data
+    private Integer candidatesWithErrors; //  Keeps track of total candidates not-upserted (w/error)
+    private Integer upsertedCandidates; //  Keeps track of total upserted candidates
+    private Integer insertedCandidates; //  Keeps track of total inserted candidates
+    private Integer updatedCandidates; //  Keeps track of total updated candidates
+    private List<String> upsertErrors; //  Keeps a log of upsert errors found across all batches
+
+    //  CONSTRUCTOR
+    public GetCandidatesBatch(CandidatesCallout.Modes mode, CandidatesCallout.Sizes size) {
         this.mode = mode;
         this.size = size;
         this.receivedCandidates = 0;
+        this.candidatesWithErrors = 0;
         this.upsertedCandidates = 0;
         this.insertedCandidates = 0;
         this.updatedCandidates = 0;
-        this.upsertErrors = '';
+        this.upsertErrors = new List<String>();
     }
 
     public List<Candidate__c> start(Database.BatchableContext ctx) {
-
+        /*
+        * Attempt making a callout using the CandidatesCallout class, and save the results to
+        * a list passed into the context. If any exceptions are raised during the callout, log
+        * them into a Developer_Log__c record, and abort the entire job, as there's nothing to 
+        * batch through
+        */
         List<Candidate__c> candidateList = new List<Candidate__c>();
         try {
             candidateList = CandidatesCallout.getCandidates(this.mode, this.size);
         } catch (Exception e) {
             DeveloperLogHandler.createDevLog(
-                DeveloperLogHandler.LOGTYPE.ERROR,
+                DeveloperLogHandler.LogType.ERROR,
                 'GetCandidatesBatch Exception: ' + System.now(),
                 'Exception Message: ' + e.getMessage() + '\n' 
                 + 'Trace String: ' + e.getStackTraceString()
@@ -72,24 +93,35 @@ public class GetCandidatesBatch implements Database.Batchable<sObject>, Database
         //  Update the total number of received candidates
         this.receivedCandidates += candidatesBatch.size(); 
 
-        List<Database.UpsertResult> saveResults = Database.upsert(
+        /*
+        * Upsert the records using the External_ID__c field as identifier. Return any errors found,
+        * but don't prevent those from upserting the correct ones
+        */
+        List<Database.UpsertResult> upsertResults = Database.upsert(
             candidatesBatch, Candidate__c.Fields.External_ID__c, false
         );
-        for (Database.UpsertResult result : saveResults) {
+
+        /*
+        * Go over the results of the upsert, update running totals and keep a log of records that
+        * failed the upsert, as well as their errors for final logging
+        */
+        for (Database.UpsertResult result : upsertResults) {
             if (!result.isSuccess()) {
-                this.upsertErrors += 'Errors during upsert: ' 
+                this.candidatesWithErrors += 1;
+                String errorMessage = 'Errors during upsert: '
                     + JSON.serialize(
                         candidatesBatch.get(
-                            saveResults.indexOf(result)
+                            upsertResults.indexOf(result)
                         )
                     )
                     + '\n';
                 for (Database.Error error : result.getErrors()) {
-                    this.upsertErrors += error.getStatusCode()
+                    errorMessage += error.getStatusCode()
                         + ':' + error.getFields()
-                        + ':' + error.getMessage();
+                        + ':' + error.getMessage()
+                        + '\n';
                 }
-                this.upsertErrors += '\n\n';
+                this.upsertErrors.add(errorMessage);
             } else {
                 this.upsertedCandidates += 1;
                 if (result.isCreated()) {
@@ -103,20 +135,27 @@ public class GetCandidatesBatch implements Database.Batchable<sObject>, Database
 
     public void finish (Database.BatchableContext ctx) {
 
-        DeveloperLogHandler.LOGTYPE logType = DeveloperLogHandler.LOGTYPE.INFO;
-        if (String.isNotBlank(this.upsertErrors)) {
-            logType = DeveloperLogHandler.LOGTYPE.WARNING;
-            this.upsertErrors = 'Errors Found:\n' + this.upsertErrors;
+        /*
+        * On finishing the entire job, insert a Developer_Log__c record of type INFO (or WARNING if
+        * any errors were found during upsert), and add the running totals and error log to the
+        * log message
+        */
+        DeveloperLogHandler.LogType logType = DeveloperLogHandler.LogType.INFO;
+        String errorMessage = '';
+        if (!this.upsertErrors.isEmpty()) {
+            logType = DeveloperLogHandler.LogType.WARNING;
+            errorMessage = 'Errors Found:\n' + String.join(this.upsertErrors, '\n\n');
         }
 
         DeveloperLogHandler.createDevLog(
             logType,
             'GetCandidatesBatch Finished: ' + System.now(), 
             'Received Candidates: ' + this.receivedCandidates + '\n'
+            + 'Candidates with Errors: ' + this.candidatesWithErrors + '\n'
             + 'Upserted Candidates: ' + this.upsertedCandidates + '\n'
             + 'Inserted Candidates: ' + this.insertedCandidates + '\n'
             + 'Updated Candidates: ' + this.updatedCandidates + '\n'
-            + this.upsertErrors
+            + errorMessage
         );
         
     }
