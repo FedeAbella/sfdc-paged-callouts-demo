@@ -94,7 +94,7 @@ public class CandidatesCallout {
         String baseURL = Callout_Setting__mdt.getInstance('Heroku_Datasource').Base_URL__c;
         //  Build the full endpoint using the base URL + paged endpoint + start + end parameters
         String endpoint = baseURL //  base URL
-            + 'paged' //  paged endpoint
+            + 'faulty' //  paged endpoint
             + '?start=' + startParam //  start parameter
             + '&end=' + endParam; //  end parameter
 
