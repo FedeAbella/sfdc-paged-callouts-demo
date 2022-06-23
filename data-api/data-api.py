@@ -185,53 +185,7 @@ def get_faulty_data():
     if (random() < FAILURE_PROB):
         return 500
 
-    # get the 'start' and 'end' parameters
-    start = request.args.get('start', None)
-    end = request.args.get('end', None)
-
-    response = {}
-
-    # check both parameters are present
-    if not start or not end:
-        response['success'] = False
-        response['error'] = "Both a 'start' and 'end' parameters are required."
-        return jsonify(response), 400
-
-    # check both parameters are valid
-    if not start.isdigit() or \
-        not end.isdigit() or \
-        int(start) == 0 or \
-        int(end) == 0:
-        response['success'] = False
-        response['error'] = "'start' and 'end' parameters must be" \
-            " positive integers."
-        return jsonify(response), 400
-
-    start, end = int(start), int(end)
-
-    # check 'start' is not larger than 'end'
-    if end < start:
-        response['sucess'] = False
-        response['error'] = "'start' cannot be larger than 'end'."
-        return jsonify(response), 400
-    
-    response['success'] = True
-    response['data'] = []
-
-    # return an empty list if 'start' larger than dataset size
-    if start > TOTAL_ROWS:
-        return jsonify(response), 200
-    # return the appropriate row if both 'start' and 'end' are the same
-    if start == end:
-        response['data'] = DATASET.iloc[[start-1]].to_dict('records')
-        return jsonify(response), 200
-    # return the remaining rows if 'end' is larger than dataset size
-    if end > TOTAL_ROWS:
-        response['data'] = DATASET[start-1:].to_dict('records')
-        return jsonify(response), 200
-    # return the dataframe splice between 'start' and 'end'
-    response['data'] = DATASET[start-1:end].to_dict('records')
-    return jsonify(response), 200
+    return get_paged_data()
 
 @app.route('/')
 def index():
