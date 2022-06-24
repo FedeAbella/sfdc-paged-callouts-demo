@@ -172,13 +172,11 @@ def get_paged_data():
 @app.route('/faulty', methods=['GET'])
 def get_faulty_data():
     """
-    Returns a paged portion of the data. Takes in two required, positive
-    integer parameters: 'start' and 'end', with 'end' >= 'start'. Returns all
-    rows between 'start' and 'end' (included) as a list in the 'data' key. 
-    First row is numbered 1. If 'start' is larger than the dataset size, 
-    returns an empty list in the key. If 'end' is larger than the dataset size,
-    returns as much as possible. If any parameter is missing or not valid, 
-    returns 400 and an error message.
+    Works the same as the 'paged' endpoint, but is faulty: It has a certain
+    probability of faiing whenever it is called. The probability of failure is 
+    saved in the constant FAILURE_PROB. When the endpoint is called, a random
+    number is generated. With the given probability, the endpoint will return
+    a 500 code. Otherwise, it will work the same as the paged endpoint.
     """
 
     # There's a probability that the endpoint simply returns a server error
