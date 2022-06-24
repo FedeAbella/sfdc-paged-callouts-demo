@@ -40,4 +40,4 @@ $RECYCLE.BIN/
 .env
 
 # Scripts folder
-scripts/
+scripts/*
