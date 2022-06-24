@@ -8,22 +8,25 @@
 * Constructor: No constructor
 *
 * Methods:
-*     - public static List<Candidate__c> getCandidates(
-*           CandidatesCallout.Modes mode, CandidatesCallout.Sizes size) {}: Attempts a
-*           callout to the Heroku_Datasource endpoint given by 'mode' and 'size', and returns a list
+*     - public static List<Candidate__c> getCandidates(CandidatesCallout.Sizes size) {}: Attempts a
+*           callout to the Heroku_Datasource endpoint using the parameter 'size', and returns a list
 *           of Candidate__c objects from the response. Raises a CandidatesCalloutException if it
 *           encounters some error.
-*     - public static List<Candidate__c> getCandidatesPaged(Integer startFrom, Integer pageSize){}:
+*     - public static List<Candidate__c> getCandidatesPaged(Integer startFrom, Integer pageSize,
+*           Boolean faulty, CandidatesCallout.Sizes size){}:
 *           Makes a callout to the paged Heroku Datasource endpoint, with startFrom and pageSize
-*           determining the range of data to request. Returns a list of Candidate__c objects built
-*           from the response. Raises a CandidatesCalloutException if it encounters some error.
+*           determining the range of data to request. The size parameter determines the maximum
+*           number of rows the endpoint will return, while the faulty parameter determines if we're
+*           calling an endpoint that always works or a faulty one that fails with some probability.
+*           Returns a list of Candidate__c objects built from the response. Raises a 
+*           CandidatesCalloutException if it encounters some error.
 *     - private static makeCallout(String endpoint){}: Given the endpoint, makes the callout to
 *           retrieve Candidate data, and returns a list of Candidate__c objects built from it.
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @author         Federico Abella   <federico.abella@cloudgaia.com>
 * @modifiedBy     Federico Abella   <federico.abella@cloudgaia.com>
 * @maintainedBy   Federico Abella   <federico.abella@cloudgaia.com>
-* @version        2.0
+* @version        3.0
 * @created        2022-06-13
 * @modified       2022-06-16
 * @systemLayer    Callouts/REST
@@ -31,14 +34,11 @@
 * @changes
 *   2022-06-16 (v2.0): Added the getCandidatesPaged method.
 *   2022-06-24 (v2.1): Added support for choosing whether to call a regular endpoint or a faulty one
+*   2022-06-24 (v3.0): Removed the Modes Enum, as endpoints are no longer different on the non-paged
+*       mode, and using 'size' in the paged endpoint to determine max number of rows
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┘
 */
 public class CandidatesCallout {
-
-    /*
-    * Temporary class variable for making a quick(er) demo
-    */
-    public static Boolean quickDemo = false;
     
     /*
     * Custom Exception for raising errors received as Exceptions, to be handled by calling class
@@ -55,32 +55,23 @@ public class CandidatesCallout {
         public List<Map<String,String>> data;
     }
 
-    //  Allowed values for the 'mode' and 'size' parameters on the non-paged endpoints
-    public Enum Modes {PARTIAL, RANDOM, COMPLETE}
-    public Enum Sizes {SMALL, MEDIUM, LARGE}
+    //  Allowed values for the 'size' parameter
+    public Enum Sizes {SMALL, MEDIUM, LARGE, COMPLETE}
 
     /*
-    * Gets Candidate objects from a non-paged Heroku endpoint, using parameters 'mode' and 'size'
-    * to define the correct endpoint to call
+    * Gets Candidate objects from a non-paged Heroku endpoint, using parameter 'size' to determine
+    * the number of rows to request
     */
-    public static List<Candidate__c> getCandidates(Modes mode, Sizes size) {
+    public static List<Candidate__c> getCandidates(Sizes size) {
 
-        //  Verify required argument, and default size to small if not present
-        if (mode == null) {
-            throw new CandidatesCalloutException('mode is a required argument');
-        }
-        String modeArg = mode.name().toLowerCase();
-        String sizeArg = (size == null) ? 'small' : size.name().toLowerCase();
+        String sizeParam = size.name().toLowerCase();
 
         //  Get the base URL for the Callout
         String baseURL = Callout_Setting__mdt.getInstance('Heroku_Datasource').Base_URL__c;
-        //  Complete the endpoint using the base URL + mode + size parameter if necessary
+        //  Complete the endpoint using the base URL + data endpoint + size parameter
         String endpoint = baseURL //  Get the base URL
-                        + modeArg //  Add the mode
-                        + (
-                            (modeArg == 'complete') ? '' : '?size=' + sizeArg
-                        );
-                        //  If mode is not complete, add the size parameter
+                        + 'data' //  Add the data endpoint
+                        + '?size=' + sizeParam;
 
         //  Make the callout and return the result
         return makeCallout(endpoint);
@@ -91,12 +82,13 @@ public class CandidatesCallout {
     * pageSize to define which set of objects to retrieve
     */
     public static List<Candidate__c> getCandidatesPaged(Integer startFrom, Integer pageSize,
-        Boolean faulty
+        Boolean faulty, CandidatesCallout.Sizes size
     ) {
 
         //  Define the start and end parameter values
         String startParam = String.valueOf(startFrom);
         String endParam = String.valueOf(startFrom + pageSize - 1);
+        String sizeParam = size.name().toLowerCase();
 
         //  Get the base URL for the callout
         String baseURL = Callout_Setting__mdt.getInstance('Heroku_Datasource').Base_URL__c;
@@ -105,7 +97,7 @@ public class CandidatesCallout {
             + (faulty ? 'faulty' :  'paged')//  paged endpoint or a faulty one
             + '?start=' + startParam //  start parameter
             + '&end=' + endParam //  end parameter
-            + (quickDemo ? '&quick=true' : ''); //  Additional parameter for making a quick(er) demo
+            + '&size=' + sizeParam; //  size parameter
 
         //  Make the callout and return the result
         return makeCallout(endpoint);

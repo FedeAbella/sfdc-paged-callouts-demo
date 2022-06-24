@@ -12,7 +12,8 @@
 *
 * Constructor:
 *     - public GetCandidatesPagedQueueable(GetCandidatesPagedQueueable.PagingAggregator aggregator, 
-*           Integer startFrom, Integer pageSize, Integer attempt, Integer depth)
+*           Integer startFrom, Integer pageSize, Integer attempt, Integer depth,
+*           Boolean faulty, CandidatesCallout.Sizes size)
 *
 * Methods:
 *     - public void execute(QueueableContext ctx): Executes the callout and processes the upsert.
@@ -43,12 +44,14 @@
 * @author         Federico Abella   <federico.abella@cloudgaia.com>
 * @modifiedBy     Federico Abella   <federico.abella@cloudgaia.com>
 * @maintainedBy   Federico Abella   <federico.abella@cloudgaia.com>
-* @version        1.0
+* @version        2.0
 * @created        2022-06-16
 * @modified       2022-06-16
 * @systemLayer    Asynchronous/Queueable/Callouts
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @changes
+*   2022-06-24 (v2.0): Changes made to accomodate being able to call a faulty endpoint, and using
+*       CandidatesCallout.Sizes Enum to determine max number of rows to retrieve.
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┘
 */
 public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCallouts {
@@ -83,10 +86,12 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
     private final Integer pageSize; //  The amount of elements to include in the current page
     private Integer depth; //  Keeps track of chain depth, so we can avoid throttling or max depth
     private Boolean faulty; //  Whether we're calling the standard endpoint or a faulty one
+    private CandidatesCallout.Sizes size; // The size of data we're getting
 
     //  CONSTRUCTOR
     public GetCandidatesPagedQueueable(PagingAggregator aggregator, Integer startFrom,
-        Integer pageSize, Integer attempt, Integer depth, Boolean faulty
+        Integer pageSize, Integer attempt, Integer depth, Boolean faulty, 
+        CandidatesCallout.Sizes size
     ) {
         this.aggregator = aggregator;
         this.startFrom = startFrom;
@@ -94,6 +99,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         this.attempt = attempt;
         this.depth = depth;
         this.faulty = faulty;
+        this.size = size;
     }
 
     public void execute (QueueableContext ctx) {
@@ -116,7 +122,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         List<Candidate__c> candidateList;
         try {
             candidateList = CandidatesCallout.getCandidatesPaged(
-                this.startFrom, this.pageSize, this.faulty
+                this.startFrom, this.pageSize, this.faulty, this.size
             );
         } catch (CandidatesCallout.CandidatesCalloutException e) {
 
@@ -343,7 +349,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         if (delay <= 0 && this.depth < 5) {
             GetCandidatesPagedQueueable nextAttempt = new GetCandidatesPagedQueueable(
                 this.aggregator, this.startFrom, this.pageSize, this.attempt + 1, this.depth + 1,
-                this.faulty
+                this.faulty, this.size
             );
             //  Only enqueue a new attempt if it's not a Test, as chaining is not allowed in tests
             if (!Test.isRunningTest()) {
@@ -354,7 +360,8 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         //  If we've set up no delay but are already at depth 5, instead break the chain
         if (delay <= 0) {
             breakChainAndRestart(
-                this.aggregator, this.startFrom, this.pageSize, this.attempt + 1,this.faulty
+                this.aggregator, this.startFrom, this.pageSize, this.attempt + 1,this.faulty,
+                this.size
             );
             return;
         }
@@ -363,7 +370,8 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         String cron = getCronInFuture(delay);
         GetCandidatesPagedQueueableScheduler nextFutureAttempt = 
             new GetCandidatesPagedQueueableScheduler(
-                this.aggregator, this.startFrom, this.pageSize, this.attempt + 1, this.faulty
+                this.aggregator, this.startFrom, this.pageSize, this.attempt + 1, this.faulty,
+                this.size
         );
         System.schedule(
             'GetCandidatesPagedQueueable attempt ' + this.attempt + 1 + ' ' + cron, 
@@ -383,7 +391,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         if (receivedCandidates == this.pageSize && this.depth < 5) {
             GetCandidatesPagedQueueable nextPage = new GetCandidatesPagedQueueable(
                 this.aggregator, this.startFrom + this.pageSize, this.pageSize, 1, this.depth + 1,
-                this.faulty
+                this.faulty, this.size
             );
             //  Only enqueue the job if we're not running tests, as chaining is not allowed in tests
             if (!Test.isRunningTest()) {
@@ -394,7 +402,8 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
 
         if (receivedCandidates == this.pageSize) {
             breakChainAndRestart(
-                this.aggregator, this.startFrom + this.pageSize, this.pageSize, 1, this.faulty
+                this.aggregator, this.startFrom + this.pageSize, this.pageSize, 1, this.faulty,
+                this.size
             );
             return;
         }
@@ -411,12 +420,12 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
     * schedule a new job to be enqueued 5 seconds into the future, resetting the stack depth.
     */
     private void breakChainAndRestart(PagingAggregator aggregator, Integer startFrom,
-        Integer pageSize, Integer attempt, Boolean faulty
+        Integer pageSize, Integer attempt, Boolean faulty, CandidatesCallout.Sizes size
     ) {
         String cron = getCronInFuture(5);
         GetCandidatesPagedQueueableScheduler futureJob = 
             new GetCandidatesPagedQueueableScheduler(
-                aggregator, startFrom, pageSize, attempt, faulty
+                aggregator, startFrom, pageSize, attempt, faulty, size
             );
         System.schedule(
             'GetCandidatesPagedQueueable attempt ' + attempt + ' ' + cron, 

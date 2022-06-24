@@ -11,18 +11,20 @@
 * Constructor:
 *     - public GetCandidatesPagedQueueableScheduler(
 *       GetCandidatesPagedQueueable.PagingAggregator aggregator, Integer startFrom,
-*       Integer pageSize, Integer attempt)
+*       Integer pageSize, Integer attempt, Boolean faulty, CandidatesCallout.Sizes size)
 *
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @author         Federico Abella   <federico.abella@cloudgaia.com>
 * @modifiedBy     Federico Abella   <federico.abella@cloudgaia.com>
 * @maintainedBy   Federico Abella   <federico.abella@cloudgaia.com>
-* @version        1.0
+* @version        1.1
 * @created        2022-06-16
 * @modified       2022-06-16
 * @systemLayer    Asynchronous/Schedulable
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @changes
+*   2022-06-24 (v1.1): Minor changes to constructor and calling the Queueable class to accomodate
+*       changes in other classes.
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┘
 */
 public class GetCandidatesPagedQueueableScheduler implements Schedulable {
@@ -33,17 +35,19 @@ public class GetCandidatesPagedQueueableScheduler implements Schedulable {
     private final Integer pageSize;
     private final Integer attempt;
     private final Boolean faulty;
+    private final CandidatesCallout.Sizes size;
 
     //  CONSTRUCTOR
     public GetCandidatesPagedQueueableScheduler(
         GetCandidatesPagedQueueable.PagingAggregator aggregator, Integer startFrom, 
-        Integer pageSize, Integer attempt, Boolean faulty
+        Integer pageSize, Integer attempt, Boolean faulty, CandidatesCallout.Sizes size
     ) {
         this.aggregator = aggregator;
         this.startFrom = startFrom;
         this.pageSize = pageSize;
         this.attempt = attempt;
         this.faulty = faulty;
+        this.size = size;
     }
 
     public void execute(SchedulableContext ctx) {
@@ -53,7 +57,7 @@ public class GetCandidatesPagedQueueableScheduler implements Schedulable {
         * of 1 (this always starts a new chain)
         */
         GetCandidatesPagedQueueable nextAttempt = new GetCandidatesPagedQueueable(
-            this.aggregator, this.startFrom, this.pageSize, this.attempt, 1, this.faulty
+            this.aggregator, this.startFrom, this.pageSize, this.attempt, 1, this.faulty, this.size
         );
         System.enqueueJob(nextAttempt);
     }
