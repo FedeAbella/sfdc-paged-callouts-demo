@@ -124,6 +124,11 @@ def get_paged_data():
     # get the 'start' and 'end' parameters
     start = request.args.get('start', None)
     end = request.args.get('end', None)
+    is_quick_demo = request.args.get('quick', None)
+
+    max_rows = TOTAL_ROWS
+    if is_quick_demo:
+        max_rows = floor( TOTAL_ROWS * PARTIAL_SIZES.get('large') )
 
     response = {}
 
@@ -155,14 +160,14 @@ def get_paged_data():
     response['data'] = []
 
     # return an empty list if 'start' larger than dataset size
-    if start > TOTAL_ROWS:
+    if start > max_rows:
         return jsonify(response), 200
     # return the appropriate row if both 'start' and 'end' are the same
     if start == end:
         response['data'] = DATASET.iloc[[start-1]].to_dict('records')
         return jsonify(response), 200
     # return the remaining rows if 'end' is larger than dataset size
-    if end > TOTAL_ROWS:
+    if end > max_rows:
         response['data'] = DATASET[start-1:].to_dict('records')
         return jsonify(response), 200
     # return the dataframe splice between 'start' and 'end'
