@@ -29,10 +29,16 @@
 * @systemLayer    Callouts/REST
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @changes
-*   2022-06-16 (v2.0): Added the getCandidatesPaged method. 
+*   2022-06-16 (v2.0): Added the getCandidatesPaged method.
+*   2022-06-24 (v2.1): Added support for choosing whether to call a regular endpoint or a faulty one
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┘
 */
 public class CandidatesCallout {
+
+    /*
+    * Temporary class variable for making a quick(er) demo
+    */
+    public static Boolean quickDemo = false;
     
     /*
     * Custom Exception for raising errors received as Exceptions, to be handled by calling class
@@ -84,7 +90,9 @@ public class CandidatesCallout {
     * Gets Candidate objects from a paged Heroku endpoint, using parameters startingElement and
     * pageSize to define which set of objects to retrieve
     */
-    public static List<Candidate__c> getCandidatesPaged(Integer startFrom, Integer pageSize) {
+    public static List<Candidate__c> getCandidatesPaged(Integer startFrom, Integer pageSize,
+        Boolean faulty
+    ) {
 
         //  Define the start and end parameter values
         String startParam = String.valueOf(startFrom);
@@ -94,9 +102,10 @@ public class CandidatesCallout {
         String baseURL = Callout_Setting__mdt.getInstance('Heroku_Datasource').Base_URL__c;
         //  Build the full endpoint using the base URL + paged endpoint + start + end parameters
         String endpoint = baseURL //  base URL
-            + 'faulty' //  paged endpoint
+            + (faulty ? 'faulty' :  'paged')//  paged endpoint or a faulty one
             + '?start=' + startParam //  start parameter
-            + '&end=' + endParam; //  end parameter
+            + '&end=' + endParam //  end parameter
+            + (quickDemo ? '&quick=true' : ''); //  Additional parameter for making a quick(er) demo
 
         //  Make the callout and return the result
         return makeCallout(endpoint);

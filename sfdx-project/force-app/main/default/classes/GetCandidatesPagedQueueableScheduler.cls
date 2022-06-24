@@ -32,16 +32,18 @@ public class GetCandidatesPagedQueueableScheduler implements Schedulable {
     private final Integer startFrom;
     private final Integer pageSize;
     private final Integer attempt;
+    private final Boolean faulty;
 
     //  CONSTRUCTOR
     public GetCandidatesPagedQueueableScheduler(
         GetCandidatesPagedQueueable.PagingAggregator aggregator, Integer startFrom, 
-        Integer pageSize, Integer attempt
+        Integer pageSize, Integer attempt, Boolean faulty
     ) {
         this.aggregator = aggregator;
         this.startFrom = startFrom;
         this.pageSize = pageSize;
         this.attempt = attempt;
+        this.faulty = faulty;
     }
 
     public void execute(SchedulableContext ctx) {
@@ -51,7 +53,7 @@ public class GetCandidatesPagedQueueableScheduler implements Schedulable {
         * of 1 (this always starts a new chain)
         */
         GetCandidatesPagedQueueable nextAttempt = new GetCandidatesPagedQueueable(
-            this.aggregator, this.startFrom, this.pageSize, this.attempt, 1
+            this.aggregator, this.startFrom, this.pageSize, this.attempt, 1, this.faulty
         );
         System.enqueueJob(nextAttempt);
     }

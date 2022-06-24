@@ -82,16 +82,18 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
     private final Integer startFrom; //  The element to start the page from
     private final Integer pageSize; //  The amount of elements to include in the current page
     private Integer depth; //  Keeps track of chain depth, so we can avoid throttling or max depth
+    private Boolean faulty; //  Whether we're calling the standard endpoint or a faulty one
 
     //  CONSTRUCTOR
     public GetCandidatesPagedQueueable(PagingAggregator aggregator, Integer startFrom,
-        Integer pageSize, Integer attempt, Integer depth
+        Integer pageSize, Integer attempt, Integer depth, Boolean faulty
     ) {
         this.aggregator = aggregator;
         this.startFrom = startFrom;
         this.pageSize = pageSize;
         this.attempt = attempt;
         this.depth = depth;
+        this.faulty = faulty;
     }
 
     public void execute (QueueableContext ctx) {
@@ -113,7 +115,9 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         //  Attempt the callout
         List<Candidate__c> candidateList;
         try {
-            candidateList = CandidatesCallout.getCandidatesPaged(this.startFrom, this.pageSize);
+            candidateList = CandidatesCallout.getCandidatesPaged(
+                this.startFrom, this.pageSize, this.faulty
+            );
         } catch (CandidatesCallout.CandidatesCalloutException e) {
 
             //  If we get any errors in callout, log it into the aggregator
@@ -146,7 +150,11 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         * in return. Log the correct callout into the aggregator, and clean up any scheduled jobs
         * remaining from previous failed attempts
         */
-        logIntoAggregatorCallout('success');
+        // logIntoAggregatorCallout('success'); 
+        /*
+        * We can also add successful attempts to logbook for checking, but we're keeping it
+        * commented here so the logbook is smaller and errors are more visible
+        */
         cleanUpScheduledJobs();
 
         /*
@@ -334,7 +342,8 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         //  If we've set up no delay and can still chain new jobs, enqueue one immediately
         if (delay <= 0 && this.depth < 5) {
             GetCandidatesPagedQueueable nextAttempt = new GetCandidatesPagedQueueable(
-                this.aggregator, this.startFrom, this.pageSize, this.attempt + 1, this.depth + 1
+                this.aggregator, this.startFrom, this.pageSize, this.attempt + 1, this.depth + 1,
+                this.faulty
             );
             //  Only enqueue a new attempt if it's not a Test, as chaining is not allowed in tests
             if (!Test.isRunningTest()) {
@@ -344,7 +353,9 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         }
         //  If we've set up no delay but are already at depth 5, instead break the chain
         if (delay <= 0) {
-            breakChainAndRestart(this.aggregator, this.startFrom, this.pageSize, this.attempt + 1);
+            breakChainAndRestart(
+                this.aggregator, this.startFrom, this.pageSize, this.attempt + 1,this.faulty
+            );
             return;
         }
 
@@ -352,7 +363,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         String cron = getCronInFuture(delay);
         GetCandidatesPagedQueueableScheduler nextFutureAttempt = 
             new GetCandidatesPagedQueueableScheduler(
-                this.aggregator, this.startFrom, this.pageSize, this.attempt + 1
+                this.aggregator, this.startFrom, this.pageSize, this.attempt + 1, this.faulty
         );
         System.schedule(
             'GetCandidatesPagedQueueable attempt ' + this.attempt + 1 + ' ' + cron, 
@@ -371,7 +382,8 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
     private void checkPagingAndMoveOnOrFinish(Integer receivedCandidates) {
         if (receivedCandidates == this.pageSize && this.depth < 5) {
             GetCandidatesPagedQueueable nextPage = new GetCandidatesPagedQueueable(
-                this.aggregator, this.startFrom + this.pageSize, this.pageSize, 1, this.depth + 1
+                this.aggregator, this.startFrom + this.pageSize, this.pageSize, 1, this.depth + 1,
+                this.faulty
             );
             //  Only enqueue the job if we're not running tests, as chaining is not allowed in tests
             if (!Test.isRunningTest()) {
@@ -381,7 +393,9 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         }
 
         if (receivedCandidates == this.pageSize) {
-            breakChainAndRestart(this.aggregator, this.startFrom + this.pageSize, this.pageSize, 1);
+            breakChainAndRestart(
+                this.aggregator, this.startFrom + this.pageSize, this.pageSize, 1, this.faulty
+            );
             return;
         }
 
@@ -397,11 +411,13 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
     * schedule a new job to be enqueued 5 seconds into the future, resetting the stack depth.
     */
     private void breakChainAndRestart(PagingAggregator aggregator, Integer startFrom,
-        Integer pageSize, Integer attempt
+        Integer pageSize, Integer attempt, Boolean faulty
     ) {
         String cron = getCronInFuture(5);
         GetCandidatesPagedQueueableScheduler futureJob = 
-            new GetCandidatesPagedQueueableScheduler(aggregator, startFrom, pageSize, attempt);
+            new GetCandidatesPagedQueueableScheduler(
+                aggregator, startFrom, pageSize, attempt, faulty
+            );
         System.schedule(
             'GetCandidatesPagedQueueable attempt ' + attempt + ' ' + cron, 
             cron, 
