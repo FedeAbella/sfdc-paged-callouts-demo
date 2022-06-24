@@ -133,7 +133,7 @@ def get_paged_data():
         return jsonify(response), 200
     # return the remaining rows if 'end' is larger than dataset size
     if end > max_rows:
-        response['data'] = DATASET[start-1:].to_dict('records')
+        response['data'] = DATASET[start-1:max_rows].to_dict('records')
         return jsonify(response), 200
     # return the dataframe splice between 'start' and 'end'
     response['data'] = DATASET[start-1:end].to_dict('records')
