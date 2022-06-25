@@ -3,24 +3,24 @@
 * GetCandidatesBatch: Batchable class for upserting Candidates from Heroku endpoint via External ID
 *
 *   Batch Apex class for getting Candidates from a Heroku endpoint. The endpoint is defined by the
-*       parameters mode and size, which determines the amount of records the endpoint returns.
+*       parameter size, which determines the amount of records the endpoint returns.
 *       The callout that gets the records is made on the start method, and those are upserted using
 *       the External_ID__c field in the execute method in batches. Class variables are used to keep
 *       running totals and errors across batches, which are then informed in the finish method.
 *
 * Constructor:
-*     - public GetCandidatesBatch(
-*           CandidatesCallout.Modes mode, CandidatesCallout.Sizes size)
+*     - public GetCandidatesBatch(CandidatesCallout.Sizes size)
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @author         Federico Abella   <federico.abella@cloudgaia.com>
 * @modifiedBy     Federico Abella   <federico.abella@cloudgaia.com>
 * @maintainedBy   Federico Abella   <federico.abella@cloudgaia.com>
-* @version        1.0
-* @created        2022-06-14
-* @modified       2022-06-14
+* @version        1.1
+* @created        2022-06-25
+* @modified       2022-06-25
 * @systemLayer    Asynchronous/Batch/Callouts
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @changes
+*   2022-06-25 (v1.1): Minor changes to accomodate changes in CandidatesCallout
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┘
 */
 public class GetCandidatesBatch implements Database.Batchable<sObject>, Database.Stateful, 
@@ -30,10 +30,7 @@ public class GetCandidatesBatch implements Database.Batchable<sObject>, Database
     //  INSTANCE VARIABLES
     /*
     * These are used for dynamically defining the correct endpoint to make the callout to.
-    * The endpoint is constructed using a base URL stored in Named Credentials, plus a 'mode' page
-    * plus a 'size' (optional) url argument
     */
-    private final CandidatesCallout.Modes mode; //  Callout mode, used to define the final endpoint
     private final CandidatesCallout.Sizes size; //  Callout size, used to define the final endpoint
 
     /*
@@ -49,8 +46,7 @@ public class GetCandidatesBatch implements Database.Batchable<sObject>, Database
     private List<String> upsertErrors; //  Keeps a log of upsert errors found across all batches
 
     //  CONSTRUCTOR
-    public GetCandidatesBatch(CandidatesCallout.Modes mode, CandidatesCallout.Sizes size) {
-        this.mode = mode;
+    public GetCandidatesBatch(CandidatesCallout.Sizes size) {
         this.size = size;
         this.receivedCandidates = 0;
         this.candidatesWithErrors = 0;
@@ -69,7 +65,7 @@ public class GetCandidatesBatch implements Database.Batchable<sObject>, Database
         */
         List<Candidate__c> candidateList = new List<Candidate__c>();
         try {
-            candidateList = CandidatesCallout.getCandidates(this.mode, this.size);
+            candidateList = CandidatesCallout.getCandidates(this.size);
         } catch (Exception e) {
             DeveloperLogHandler.createDevLog(
                 DeveloperLogHandler.LogType.ERROR,
