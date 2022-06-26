@@ -90,4 +90,10 @@ public class TestUtils {
 
         return randomID;
     }
+
+    /*
+    * testDelay public attribute, used to set and get values for Delay between failed attempts
+    * in tests, bypassing the actual values used in the custom metadata type
+    */
+    public static Integer testDelay;
 }

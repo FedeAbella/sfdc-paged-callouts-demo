@@ -33,6 +33,9 @@
 *           corresponding to some number of seconds in the future from now.
 *     - private void setUpNextAttempt(): Sets up enqueueing or scheduling a new attempt at making
 *           a callout to a page when one has already failed.
+*     - private Integer getDelayBetweenAttempts(): Returns the delay set in Custom Metadata Types to
+*           be left between failed callout attempts. If we're running a test, instead receive a
+*           value set in TestUtils
 *     - private void checkPagingAndMoveOnOrFinish(Integer receivedCandidates): Handles checking
 *           whether a new page needs to be called for, or the last page has been reached, and either
 *           enqueues or schedules a new job to do so.
@@ -342,8 +345,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     */
     private void setUpNextAttempt() {
         //  Get the setup delay between attempts
-        Integer delay = (Integer) Callout_Setting__mdt.getInstance('Heroku_Datasource')
-                                                      .Delay_Between_Attempts__c;
+        Integer delay = getDelayBetweenAttempts();
 
         //  If we've set up no delay and can still chain new jobs, enqueue one immediately
         if (delay <= 0 && this.depth < 5) {
@@ -378,6 +380,19 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
             cron, 
             nextFutureAttempt
         );
+    }
+
+    /*
+    * Get the delay between attempts. This is usually set in the Custom Metadata Type, but we need
+    * to be able to set it from a Test Class and retrieve that value to test both 0 and non-0 values
+    */
+    private Integer getDelayBetweenAttempts() {
+        if (Test.isRunningTest()) {
+            return TestUtils.testDelay;
+        }
+
+        return (Integer)Callout_Setting__mdt.getInstance('Heroku_Datasource')
+                                            .Delay_Between_Attempts__c;
     }
 
     /*
