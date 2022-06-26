@@ -1,16 +1,16 @@
 /*
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┐
-* GetCandidatesPagedQueueableScheduler: Scheduler Apex class that enqueues a new job for the
-*   GetCandidatesPagedQueueable class.
+* GetCandidatesPagedScheduler: Scheduler Apex class that enqueues a new job for the
+*   GetCandidatesPaged class.
 *
-*   When callouts from GetCandidatesPagedQueueable class fail or a certain stack depth is reached, 
+*   When callouts from GetCandidatesPaged class fail or a certain stack depth is reached, 
 *   a new job needsto be made. This class allows scheduling those new jobs to run some time in the 
 *   future, so as to not repeatedly attempt failed callouts one right after another, and to break
 *   up chains, resetting the stack depth and avoiding throttling limits or stack depth exceptions.
 *
 * Constructor:
-*     - public GetCandidatesPagedQueueableScheduler(
-*       GetCandidatesPagedQueueable.PagingAggregator aggregator, Integer startFrom,
+*     - public GetCandidatesPagedScheduler(
+*       GetCandidatesPaged.PagingAggregator aggregator, Integer startFrom,
 *       Integer pageSize, Integer attempt, Boolean faulty, CandidatesCallout.Sizes size)
 *
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -27,10 +27,10 @@
 *       changes in other classes.
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┘
 */
-public class GetCandidatesPagedQueueableScheduler implements Schedulable {
+public class GetCandidatesPagedScheduler implements Schedulable {
 
     //  CLASS VARIABLES
-    private GetCandidatesPagedQueueable.PagingAggregator aggregator;
+    private GetCandidatesPaged.PagingAggregator aggregator;
     private final Integer startFrom;
     private final Integer pageSize;
     private final Integer attempt;
@@ -38,8 +38,8 @@ public class GetCandidatesPagedQueueableScheduler implements Schedulable {
     private final CandidatesCallout.Sizes size;
 
     //  CONSTRUCTOR
-    public GetCandidatesPagedQueueableScheduler(
-        GetCandidatesPagedQueueable.PagingAggregator aggregator, Integer startFrom, 
+    public GetCandidatesPagedScheduler(
+        GetCandidatesPaged.PagingAggregator aggregator, Integer startFrom, 
         Integer pageSize, Integer attempt, Boolean faulty, CandidatesCallout.Sizes size
     ) {
         this.aggregator = aggregator;
@@ -52,11 +52,11 @@ public class GetCandidatesPagedQueueableScheduler implements Schedulable {
 
     public void execute(SchedulableContext ctx) {
         /*
-        * Create a new job at making a callout from GetCandidatesPagedQueueable class,
+        * Create a new job at making a callout from GetCandidatesPaged class,
         * getting the information passed from the previous job, then enqueue it with a depth value
         * of 1 (this always starts a new chain)
         */
-        GetCandidatesPagedQueueable nextAttempt = new GetCandidatesPagedQueueable(
+        GetCandidatesPaged nextAttempt = new GetCandidatesPaged(
             this.aggregator, this.startFrom, this.pageSize, this.attempt, 1, this.faulty, this.size
         );
         System.enqueueJob(nextAttempt);

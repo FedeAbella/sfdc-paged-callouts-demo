@@ -1,6 +1,6 @@
 /*
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┐
-* GetCandidatesPagedQueueable: Queuable class for upserting Candidate records from Heroku endpoint
+* GetCandidatesPaged: Queuable class for upserting Candidate records from Heroku endpoint
 *                              via External ID, using paging to get the records in parts.
 *
 *   Queueable Apex class that makes callouts to a Heroku endpoint in a paged manner, getting
@@ -11,7 +11,7 @@
 *   a maximum number of allowed attempts defined in a Custom Metadata Type.
 *
 * Constructor:
-*     - public GetCandidatesPagedQueueable(GetCandidatesPagedQueueable.PagingAggregator aggregator, 
+*     - public GetCandidatesPaged(GetCandidatesPaged.PagingAggregator aggregator, 
 *           Integer startFrom, Integer pageSize, Integer attempt, Integer depth,
 *           Boolean faulty, CandidatesCallout.Sizes size)
 *
@@ -54,7 +54,7 @@
 *       CandidatesCallout.Sizes Enum to determine max number of rows to retrieve.
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┘
 */
-public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCallouts {
+public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     
     /*
     * Aggregator class so we can keep track of aggregated results along multiple pages
@@ -89,7 +89,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
     private CandidatesCallout.Sizes size; // The size of data we're getting
 
     //  CONSTRUCTOR
-    public GetCandidatesPagedQueueable(PagingAggregator aggregator, Integer startFrom,
+    public GetCandidatesPaged(PagingAggregator aggregator, Integer startFrom,
         Integer pageSize, Integer attempt, Integer depth, Boolean faulty, 
         CandidatesCallout.Sizes size
     ) {
@@ -262,7 +262,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         DeveloperLogHandler.createDevLog(
             logType, 
             'Get Candidates Paged Complete: ' + System.now(), 
-            'GetCandidatesPagedQueueable class has completed the job.\n\n'
+            'GetCandidatesPaged class has completed the job.\n\n'
             + getAggregatorData()
         );
     }
@@ -275,7 +275,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         DeveloperLogHandler.createDevLog(
             DeveloperLogHandler.LogType.ERROR, 
             'Get Candidates Paged Max Attempts Reached: ' + System.now(), 
-            'GetCandidatesPagedQueueable class has reached the maximum number of allowed attempts. '
+            'GetCandidatesPaged class has reached the maximum number of allowed attempts. '
             + 'Max attempts allowed: ' + maxAttempts + '\n\n'
             + 'Before the error was reached:\n\n'
             + getAggregatorData()
@@ -290,7 +290,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         DeveloperLogHandler.createDevLog(
             DeveloperLogHandler.LogType.ERROR, 
             'Get Candidates Paged Exception: ' + System.now(), 
-            'GetCandidatesPagedQueueable class exceeded maximum number of allowed attempts. ' 
+            'GetCandidatesPaged class exceeded maximum number of allowed attempts. ' 
             + 'Attempt number: ' + this.attempt + '. Max attempts allowed: ' + maxAttempts + '\n\n'
             + 'Before the error was reached:\n\n'
             + getAggregatorData()
@@ -347,7 +347,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
 
         //  If we've set up no delay and can still chain new jobs, enqueue one immediately
         if (delay <= 0 && this.depth < 5) {
-            GetCandidatesPagedQueueable nextAttempt = new GetCandidatesPagedQueueable(
+            GetCandidatesPaged nextAttempt = new GetCandidatesPaged(
                 this.aggregator, this.startFrom, this.pageSize, this.attempt + 1, this.depth + 1,
                 this.faulty, this.size
             );
@@ -368,13 +368,13 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
 
         //  If there's some delay set up between attempts, schedule a new job to run in the future
         String cron = getCronInFuture(delay);
-        GetCandidatesPagedQueueableScheduler nextFutureAttempt = 
-            new GetCandidatesPagedQueueableScheduler(
+        GetCandidatesPagedScheduler nextFutureAttempt = 
+            new GetCandidatesPagedScheduler(
                 this.aggregator, this.startFrom, this.pageSize, this.attempt + 1, this.faulty,
                 this.size
         );
         System.schedule(
-            'GetCandidatesPagedQueueable attempt ' + this.attempt + 1 + ' ' + cron, 
+            'GetCandidatesPaged attempt ' + this.attempt + 1 + ' ' + cron, 
             cron, 
             nextFutureAttempt
         );
@@ -389,7 +389,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
     */
     private void checkPagingAndMoveOnOrFinish(Integer receivedCandidates) {
         if (receivedCandidates == this.pageSize && this.depth < 5) {
-            GetCandidatesPagedQueueable nextPage = new GetCandidatesPagedQueueable(
+            GetCandidatesPaged nextPage = new GetCandidatesPaged(
                 this.aggregator, this.startFrom + this.pageSize, this.pageSize, 1, this.depth + 1,
                 this.faulty, this.size
             );
@@ -423,12 +423,12 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
         Integer pageSize, Integer attempt, Boolean faulty, CandidatesCallout.Sizes size
     ) {
         String cron = getCronInFuture(5);
-        GetCandidatesPagedQueueableScheduler futureJob = 
-            new GetCandidatesPagedQueueableScheduler(
+        GetCandidatesPagedScheduler futureJob = 
+            new GetCandidatesPagedScheduler(
                 aggregator, startFrom, pageSize, attempt, faulty, size
             );
         System.schedule(
-            'GetCandidatesPagedQueueable attempt ' + attempt + ' ' + cron, 
+            'GetCandidatesPaged attempt ' + attempt + ' ' + cron, 
             cron, 
             futureJob
         );
@@ -446,7 +446,7 @@ public class GetCandidatesPagedQueueable implements Queueable, Database.AllowsCa
             SELECT Id
             FROM CronTrigger
             WHERE CronJobDetail.JobType = '7'
-            AND CronJobDetail.Name LIKE 'GetCandidatesPagedQueueable attempt%'
+            AND CronJobDetail.Name LIKE 'GetCandidatesPaged attempt%'
             AND NextFireTime = NULL
             AND TimesTriggered = 1
         ];
