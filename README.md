@@ -15,7 +15,9 @@ And so we come to this demo. This is a stripped down version of how we rebuilt t
 
 ## The data
 
-Ok, I'm obviously not going through this demo using any of our customer's endpoints or data, so I've set up a very simple Heroku app that will return either paged or non-paged data. That way we can see how both scenarios are handled. **Disclaimer:** Both the Heroku api and the script used to build the fake data are made in Python. I can handle myself around Python, but I'm surely not as good with it as with Apex. Plus, this was my first time building an api using Flask or Heroku, so don't expect that part to be as polished as the Apex bits. That being said, any constructive criticism about that is also welcome.
+Ok, I'm obviously not going through this demo using any of our customer's endpoints or data, so I've set up a very simple Heroku app that will return either paged or non-paged data. That way we can see how both scenarios are handled. 
+
+**Disclaimer:** Both the Heroku api and the script used to build the fake data are made in Python. I can handle myself around Python, but I'm surely not as good with it as with Apex. Plus, this was my first time building an api using Flask or Heroku, so don't expect that part to be as polished as the Apex bits. That being said, any constructive criticism about that is also welcome.
 - You can find the script used to create the large amount of data under [`data-maker`](https://github.com/FedeAbella/salesforce-paged-callouts-demo/tree/master/data-maker). It's currently built to return a `csv` of 500k "Candidates" with their name, current position, current company and some external ID.
 - In [`data-api`](https://github.com/FedeAbella/salesforce-paged-callouts-demo/tree/master/data-api) you'll find the Flask api that is called to return the data, as well as the required files for exposing it in Heroku.
 
