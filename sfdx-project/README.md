@@ -2,7 +2,7 @@
 
 Ok, this is probably what you're here for, so let's go over it. This is just an `sfdx` project, same as if you created it using `sfdx-cli` or VSCode. Feel free to push this into a fresh new org to see how it works (some disclaimers at the bottom of this apply, so keep on reading).
 
-TL;DR: If you don't really care about the whole structure of the thing and want to get right into the action, jump ahead to [this section](#Ok,-that's-good-and-all,-but-I-want-to-try-it-out-for-myself-now.-How-do-I-do-that?) 
+TL;DR: If you don't really care about the whole structure of the thing and want to get right into the action, jump ahead to [this section](#ok,-that's-good-and-all,-but-i-want-to-try-it-out-for-myself-now.-how-do-i-do-that?) 
 
 ## The metadata
 
