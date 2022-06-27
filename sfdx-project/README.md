@@ -77,7 +77,9 @@ So, as far as chained queueables go, one thing to keep in mind. **And it's an im
 Well, not quite. Give me some credit here. I'm 1928 words into this README, and I wouldn't be here if this was it. Remember how we're scheduling new attempts some time into the future to give the external system some breathing room before re-trying the same page? Well, turns out when we do that, we're also breaking up the stack depth of chained queueables. We're no calling a new queueable from our class, after all. We're calling a schedulable class, which by itself will enqueue a new job. And that's all we need. Once we get to a stack depth of 5, we'll break the chain, postpone our next page for a few seconds, and reset the counter. No throttling here. So we're going for a `Q-Q-Q-Q-Q- S - Q-Q...` pattern here. You'll fine some other devs around taking about a `Q-Q-Q-Q-Q- F -Q-Q...` pattern, using `@future` methods to break up queueable chains instead. But we've already got a Schedulable class doing some work for us, so why not use it?
 
 <a name="TryIt"/>
+
 ## Ok, that's good and all, but I want to try it out for myself now. How do I do that?
+
 Well, first of all, if you got here from the TL;DR at the top, at least go and read [the Disclaimer Section](#the-disclaimer-section) before moving on.
 
 We're done? Good. Just clone the repo, and push the `force-app` directory in the `sfdx-project` into a fresh new org. You should have everything you need to test this out. Don't forget to go into the org and put yourself into the `Admins` public group if you want to get the `Developer_Log__c` info in the mail when a job is done.
