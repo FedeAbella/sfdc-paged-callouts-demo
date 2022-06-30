@@ -69,7 +69,6 @@ private class GetCandidatesPagedTest {
         Test.startTest();
             //  Set the delay to be greater than 0. This ensure the new attempt is scheduled
             TestUtils.testDelay = 30;
-
             Test.setMock(
                 HttpCalloutMock.class, 
                 new CandidatesCalloutMock(CandidatesCalloutMock.Errors.CALLOUT)
@@ -104,7 +103,6 @@ private class GetCandidatesPagedTest {
         Test.startTest();
             //  Set the delay to be 0. This calls for the next attempt to be enqueued immediately
             TestUtils.testDelay = 0;
-
             Test.setMock(
                 HttpCalloutMock.class, 
                 new CandidatesCalloutMock(CandidatesCalloutMock.Errors.CALLOUT)
@@ -601,6 +599,63 @@ private class GetCandidatesPagedTest {
         );
         System.assert(
             logsList[0].Message__c.contains('External_ID__c')
+        );
+    }
+
+    @IsTest
+    static void testPagingAggregatorBeyondAllowedSize(){
+
+        Test.startTest();
+            //  Override the value for max allowed heap size taken by PagingAggregator
+            TestUtils.testMaxHeapSize = 0;
+            Test.setMock(
+                HttpCalloutMock.class, 
+                new CandidatesCalloutMock(5000)
+            );
+
+            GetCandidatesPaged queueableJob = new GetCandidatesPaged(
+                new GetCandidatesPaged.PagingAggregator(), 1, 5000, 1, 1, false,
+                CandidatesCallout.Sizes.COMPLETE
+            );
+            System.enqueueJob(queueableJob);
+        Test.stopTest();
+
+        //  Assert the job has run and completed
+        List<AsyncApexJob> jobsList = [
+            SELECT ApexClass.Name, Status
+            FROM AsyncApexJob
+            WHERE JobType = 'Queueable'
+        ];
+        System.assertEquals(1, jobsList.size());
+        System.assertEquals('GetCandidatesPaged', jobsList[0].ApexClass.Name);
+        System.assertEquals('Completed', jobsList[0].Status);
+
+        //  Assert the correct number of candidates were inserted
+        Integer numCandidates = [
+            SELECT COUNT()
+            FROM Candidate__c
+        ];
+        System.assertEquals(5000, numCandidates);
+
+        /*
+        * Assert the partial results were flushed and a Developer_Log__c was created, even though
+        * the job is supposed to keep on paging
+        */
+        List<Developer_Log__c> logsList = [
+            SELECT Type__c, Name, Message__c
+            FROM Developer_Log__c
+        ];
+        System.assertEquals(1, logsList.size());
+        System.assertEquals('INFO', logsList[0].Type__c);
+        System.assert(
+            logsList[0].Name.startsWith(
+                'Get Candidates Paged Partial result'
+            )
+        );
+        System.assert(
+            logsList[0].Message__c.startsWith(
+                'GetCandidatesPaged class flushed partial result because of Aggregator Size'
+            )
         );
     }
 }

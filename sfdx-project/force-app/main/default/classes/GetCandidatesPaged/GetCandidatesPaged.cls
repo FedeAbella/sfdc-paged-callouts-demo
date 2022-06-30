@@ -18,14 +18,14 @@
 * Methods:
 *     - public void execute(QueueableContext ctx): Executes the callout and processes the upsert.
 *           Handles whether a new attempt or a new page must be called
-*     - private void logIntoAggregatorCallout(String message): Logs a received or success message
+*     - private void logAggregatorCallout(String message): Logs a received or success message
 *           for each callout attempt made into the aggregator logbook
 *     - private void logJobFinished(): Inserts a Developer_Log__c record upon finishing the entire
 *           job, detailing the results
-*     - private void logMaxAttemptsReachedError(Integer maxAttempts): Inserts a Developer_Log__c
+*     - private void logMaxAttemptsReached(Integer maxAttempts): Inserts a Developer_Log__c
 *           record detailing that the maximum number of attempted callouts failed, thus ending the
 *           job prematurely
-*     - private void logMaxAttemptsExceededError(Integer maxAttempts): Inserts a Developer_Log__c
+*     - private void logMaxAttemptsExceeded(Integer maxAttempts): Inserts a Developer_Log__c
 *           record detailing that an attempt was made that exceeds the maximum allowed attempts
 *     - private String getAggregatorData(): Parses data saeved in the PagingAggregator into a
 *           message string to be used in Developer_Log__c records
@@ -36,49 +36,63 @@
 *     - private Integer getDelayBetweenAttempts(): Returns the delay set in Custom Metadata Types to
 *           be left between failed callout attempts. If we're running a test, instead receive a
 *           value set in TestUtils
-*     - private void checkPagingAndMoveOnOrFinish(Integer receivedCandidates): Handles checking
+*     - private void checkPaging(Integer receivedCandidates): Handles checking
 *           whether a new page needs to be called for, or the last page has been reached, and either
 *           enqueues or schedules a new job to do so.
 *     - private void breakChainAndRestart(): Breaks chains of jobs that have reached stack depth of
 *           5, by instead of enqueueing a job, scheduling one to be enqueued 5 seconds in the future
 *     - private void cleanUpScheduledJobs(): Aborts previously ran scheduled jobs pertaining to new
 *           attempts or breaking of chains, cleaning up the scheduled jobs section of setup.
+*     - private void manageAggregatorSize(): Check the estimated heap size taken by the
+*           PagingAggregator, and compare it to a fraction of limit heap size, as defined in custom
+*           metadata type. If it's larger, flush the data into a Developer_Log__c record, and
+*           reinstantiate a new empty PagingAggregator
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @author         Federico Abella   <federico.abella@cloudgaia.com>
 * @modifiedBy     Federico Abella   <federico.abella@cloudgaia.com>
 * @maintainedBy   Federico Abella   <federico.abella@cloudgaia.com>
-* @version        2.0
+* @version        3.0
 * @created        2022-06-16
-* @modified       2022-06-16
+* @modified       2022-06-29
 * @systemLayer    Asynchronous/Queueable/Callouts
 * ──────────────────────────────────────────────────────────────────────────────────────────────────
 * @changes
 *   2022-06-24 (v2.0): Changes made to accomodate being able to call a faulty endpoint, and using
 *       CandidatesCallout.Sizes Enum to determine max number of rows to retrieve.
+*   2022-06-29 (v3.0): Added handling the PagingAggregator size possibly taking a large size, thus
+*       flushing the results and reinstantiating to avoid heap size limit exceptions
 * ─────────────────────────────────────────────────────────────────────────────────────────────────┘
 */
 public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     
     /*
-    * Aggregator class so we can keep track of aggregated results along multiple pages
+    * Aggregator class so we can keep track of aggregated results along multiple pages.
+    * Because the aggregator is passed along instances of the Queueable class, and keeps growing
+    * in size as more information is collected, we also keep an estimate of the total heap size
+    * taken by the aggregator. This is most likely going to be dominated by the total size of string
+    * values written into logbooks, so this is used as the main first-order estimation. Along the
+    * code, every string added to one of the logbooks is counted as its length() times 2 bytes (as
+    * each Unicode character takes 16-bits)
     */
     public class PagingAggregator {
-        public Integer aggregatedReceivedCandidates; //  Keep track of total candidates received
-        public Integer aggregatedUpsertedCandidates; //  Keep track of total upserted candidates
-        public Integer aggregatedInsertedCandidates; //  Keep track of total inserted candidates
-        public Integer aggregatedUpdatedCandidates; //  Keep track of total updated candidates
-        public Integer aggregatedErrorCandidates; //  Keep track of total candidates with errors
-        public List<String> calloutsLogbook; //  Keep a logbook of callout attemps
-        public List<String> upsertErrorLogbook; //  Keep a logbook of upsert errors across pages
+        public Integer aggReceived; //  Keep track of total candidates received
+        public Integer aggUpserted; //  Keep track of total upserted candidates
+        public Integer aggInserted; //  Keep track of total inserted candidates
+        public Integer aggUpdated; //  Keep track of total updated candidates
+        public Integer aggWithError; //  Keep track of total candidates with errors
+        public Integer estHeapSize; //  An estimate of total heap size taken by this object
+        public List<String> callsLogbook; //  Keep a logbook of callout attemps
+        public List<String> errorLogbook; //  Keep a logbook of upsert errors across pages
 
         public PagingAggregator() {
-            this.aggregatedReceivedCandidates = 0;
-            this.aggregatedUpsertedCandidates = 0;
-            this.aggregatedInsertedCandidates = 0;
-            this.aggregatedUpdatedCandidates = 0;
-            this.aggregatedErrorCandidates = 0;
-            this.calloutsLogbook = new List<String>();
-            this.upsertErrorLogbook = new List<String>();
+            this.aggReceived = 0;
+            this.aggUpserted = 0;
+            this.aggInserted = 0;
+            this.aggUpdated = 0;
+            this.aggWithError = 0;
+            this.estHeapSize = 0;
+            this.callsLogbook = new List<String>();
+            this.errorLogbook = new List<String>();
         }
     }
 
@@ -116,7 +130,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
         * created as previous attempts, and end the job
         */
         if (attempt > maxAttempts) {
-            logMaxAttemptsExceededError(maxAttempts);
+            logMaxAttemptsExceeded(maxAttempts);
             cleanUpScheduledJobs();
             return;
         }
@@ -130,7 +144,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
         } catch (CandidatesCallout.CandidatesCalloutException e) {
 
             //  If we get any errors in callout, log it into the aggregator
-            logIntoAggregatorCallout(
+            logAggregatorCallout(
                 e.getMessage()
             );
 
@@ -149,7 +163,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
             * clean up any scheduled jobs that were created during previous failed attempts, and
             * finish this job.
             */
-            logMaxAttemptsReachedError(maxAttempts);
+            logMaxAttemptsReached(maxAttempts);
             cleanUpScheduledJobs();
             return;
         }
@@ -159,7 +173,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
         * in return. Log the correct callout into the aggregator, and clean up any scheduled jobs
         * remaining from previous failed attempts
         */
-        // logIntoAggregatorCallout('success'); 
+        // logAggregatorCallout('success'); 
         /*
         * We can also add successful attempts to logbook for checking, but we're keeping it
         * commented here so the logbook is smaller and errors are more visible
@@ -180,7 +194,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
         * If we're here, then we've received some candidates back from the callout
         */
         //  Add the number of received candidates to the aggregator
-        this.aggregator.aggregatedReceivedCandidates += candidateList.size();
+        this.aggregator.aggReceived += candidateList.size();
 
         /*
         * This would be the place for some post-processing on the objects returned from the callout.
@@ -202,7 +216,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
         */
         for (Database.UpsertResult result : upsertResults) {
             if (!result.isSuccess()) {
-                this.aggregator.aggregatedErrorCandidates += 1;
+                this.aggregator.aggWithError += 1;
                 String errorMessage = 'Errors during upsert: '
                     + JSON.serialize(
                         candidateList.get(
@@ -216,13 +230,14 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
                         + ':' + error.getMessage()
                         + '\n';
                 }
-                this.aggregator.upsertErrorLogbook.add(errorMessage);
+                this.aggregator.estHeapSize += errorMessage.length() * 2;
+                this.aggregator.errorLogbook.add(errorMessage);
             } else {
-                this.aggregator.aggregatedUpsertedCandidates += 1;
+                this.aggregator.aggUpserted += 1;
                 if (result.isCreated()) {
-                    this.aggregator.aggregatedInsertedCandidates += 1;
+                    this.aggregator.aggInserted += 1;
                 } else {
-                    this.aggregator.aggregatedUpdatedCandidates += 1;
+                    this.aggregator.aggUpdated += 1;
                 }
             }
         }
@@ -231,7 +246,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
         * After we're done with all the processing, check whether we should move onto a new page
         * or if the job is complete. The finish the current job.
         */
-        checkPagingAndMoveOnOrFinish(candidateList.size());
+        checkPaging(candidateList.size());
         return;
     }   
 
@@ -240,7 +255,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     /*
     * Logs a message into the paging aggregator's callout logbook
     */
-    private void logIntoAggregatorCallout(String message) {
+    private void logAggregatorCallout(String message) {
         System.JSONGenerator gen = JSON.createGenerator(false);
         gen.writeStartObject();
         gen.writeNumberField('startFrom', this.startFrom);
@@ -249,7 +264,8 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
         gen.writeStringField('message', message);
         gen.close();
 
-        this.aggregator.calloutsLogbook.add(
+        this.aggregator.estHeapSize += gen.getAsString().length() * 2;
+        this.aggregator.callsLogbook.add(
             gen.getAsString()
         );
     }
@@ -259,7 +275,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     * during upsert) informing the entire paging job has finished. Include the aggregated data.
     */
     private void logJobFinished() {
-        DeveloperLogHandler.LogType logType = this.aggregator.upsertErrorLogbook.isEmpty() ? 
+        DeveloperLogHandler.LogType logType = this.aggregator.errorLogbook.isEmpty() ? 
                                               DeveloperLogHandler.LogType.INFO :
                                               DeveloperLogHandler.LogType.WARNING;
         DeveloperLogHandler.createDevLog(
@@ -274,7 +290,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     * Insert a DeveloperLog__c record of type ERROR warning that the maximum number of allowed
     * attempts was reached. Include the aggregator data received thus far before the error.
     */
-    private void logMaxAttemptsReachedError(Integer maxAttempts) {
+    private void logMaxAttemptsReached(Integer maxAttempts) {
         DeveloperLogHandler.createDevLog(
             DeveloperLogHandler.LogType.ERROR, 
             'Get Candidates Paged Max Attempts Reached: ' + System.now(), 
@@ -289,7 +305,7 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     * Insert a Developer_Log__c record of type ERROR warning of the max attempts allowed being
     * exceeded. Include the aggregator data received thus far before the error.
     */
-    private void logMaxAttemptsExceededError(Integer maxAttempts) {
+    private void logMaxAttemptsExceeded(Integer maxAttempts) {
         DeveloperLogHandler.createDevLog(
             DeveloperLogHandler.LogType.ERROR, 
             'Get Candidates Paged Exception: ' + System.now(), 
@@ -301,23 +317,34 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     }
 
     /*
+    * Insert a Developer_Log__c record of type INFO, reporting the job needed to flush its
+    * PagingAggregator results due to a large Aggregator size before continuing.
+    */
+    private void logPartialResult() {
+        DeveloperLogHandler.createDevLog(
+            DeveloperLogHandler.LogType.INFO, 
+            'Get Candidates Paged Partial result: ' + System.now(),
+            'GetCandidatesPaged class flushed partial result because of Aggregator Size:\n\n'
+            + getAggregatorData()
+            + '\n\nAggregator was reinitialized and job continued.'
+        );
+    }
+
+    /*
     * Get the data stored in the aggregator object in a formatted string, to be used in 
     * Developer_Log__c records to be inserted, informing of success or failure of callout
     */
     private String getAggregatorData() {
-        String aggregatedData = 
-        'Received Candidates: ' + this.aggregator.aggregatedReceivedCandidates + '\n'
-        + 'Upserted Candidates: ' + this.aggregator.aggregatedUpsertedCandidates + '\n'
-        + 'Inserted Candidates: ' + this.aggregator.aggregatedInsertedCandidates + '\n'
-        + 'Updated Candidates: ' + this.aggregator.aggregatedUpdatedCandidates + '\n'
-        + 'Candidates with Errors: ' + this.aggregator.aggregatedErrorCandidates + '\n\n'
-        + ((this.aggregator.upsertErrorLogbook.isEmpty()) ? 
+        return 'Received Candidates: ' + this.aggregator.aggReceived + '\n'
+        + 'Upserted Candidates: ' + this.aggregator.aggUpserted + '\n'
+        + 'Inserted Candidates: ' + this.aggregator.aggInserted + '\n'
+        + 'Updated Candidates: ' + this.aggregator.aggUpdated + '\n'
+        + 'Candidates with Errors: ' + this.aggregator.aggWithError + '\n\n'
+        + ((this.aggregator.errorLogbook.isEmpty()) ? 
             '' :
-            'Database Error logbook:\n' + String.join(this.aggregator.upsertErrorLogbook, '\n\n')
+            'Database Error logbook:\n' + String.join(this.aggregator.errorLogbook, '\n\n')
           )
-        + 'Callouts logbook:\n\n' + String.join(this.aggregator.calloutsLogbook, '\n');
-
-        return aggregatedData;
+        + 'Callouts logbook:\n\n' + String.join(this.aggregator.callsLogbook, '\n');
     }
 
     /*
@@ -344,18 +371,25 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     * the future.
     */
     private void setUpNextAttempt() {
+
+        /*
+        * Before setting up next attempt, check if we need to flush the PagingAggregator into a
+        * partial result Developer_Log__c, to avoid runaway heap size in the Aggregator
+        */
+        manageAggregatorSize();
+
         //  Get the setup delay between attempts
         Integer delay = getDelayBetweenAttempts();
 
         //  If we've set up no delay and can still chain new jobs, enqueue one immediately
         if (delay <= 0 && this.depth < 5) {
-            GetCandidatesPaged nextAttempt = new GetCandidatesPaged(
-                this.aggregator, this.startFrom, this.pageSize, this.attempt + 1, this.depth + 1,
-                this.faulty, this.size
-            );
             //  Only enqueue a new attempt if it's not a Test, as chaining is not allowed in tests
             if (!Test.isRunningTest()) {
-                System.enqueueJob(nextAttempt);
+                System.enqueueJob(new GetCandidatesPaged(
+                    this.aggregator, this.startFrom, this.pageSize, this.attempt + 1, 
+                    this.depth + 1, this.faulty, this.size
+                    )
+                );
             }
             return;
         }
@@ -369,16 +403,13 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
         }
 
         //  If there's some delay set up between attempts, schedule a new job to run in the future
-        String cron = getCronInFuture(delay);
-        GetCandidatesPagedScheduler nextFutureAttempt = 
+        System.schedule(
+            'GetCandidatesPaged attempt ' + this.attempt + 1 + ' ' + getCronInFuture(delay), 
+            getCronInFuture(delay), 
             new GetCandidatesPagedScheduler(
                 this.aggregator, this.startFrom, this.pageSize, this.attempt + 1, this.faulty,
                 this.size
-        );
-        System.schedule(
-            'GetCandidatesPaged attempt ' + this.attempt + 1 + ' ' + cron, 
-            cron, 
-            nextFutureAttempt
+            )
         );
     }
 
@@ -402,15 +433,22 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     * so immediately enqueue getting the next page if the stack depth is less than 5. If the stack
     * depth has reached 5, instead break the chain and schedule to continue it a bit in the future.
     */
-    private void checkPagingAndMoveOnOrFinish(Integer receivedCandidates) {
+    private void checkPaging(Integer receivedCandidates) {
+
         if (receivedCandidates == this.pageSize && this.depth < 5) {
-            GetCandidatesPaged nextPage = new GetCandidatesPaged(
-                this.aggregator, this.startFrom + this.pageSize, this.pageSize, 1, this.depth + 1,
-                this.faulty, this.size
-            );
+            /*
+            * If we're to enqueue a new page, first consider the PagingAggregator size, so as to
+            * avoid runaway heap sizes
+            */
+            manageAggregatorSize();
+
             //  Only enqueue the job if we're not running tests, as chaining is not allowed in tests
             if (!Test.isRunningTest()) {
-                System.enqueueJob(nextPage);
+                System.enqueueJob(new GetCandidatesPaged(
+                    this.aggregator, this.startFrom + this.pageSize, this.pageSize, 1, 
+                    this.depth + 1, this.faulty, this.size
+                    )
+                );
             }
             return;
         }
@@ -437,15 +475,18 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     private void breakChainAndRestart(PagingAggregator aggregator, Integer startFrom,
         Integer pageSize, Integer attempt, Boolean faulty, CandidatesCallout.Sizes size
     ) {
-        String cron = getCronInFuture(5);
-        GetCandidatesPagedScheduler futureJob = 
+        /*
+        * Before setting up the next link in the chain, consider the PagingAggregator size to avoid
+        * runaway heap sizes
+        */
+        manageAggregatorSize();
+
+        System.schedule(
+            'GetCandidatesPaged attempt ' + attempt + ' ' + getCronInFuture(5), 
+            getCronInFuture(5),
             new GetCandidatesPagedScheduler(
                 aggregator, startFrom, pageSize, attempt, faulty, size
-            );
-        System.schedule(
-            'GetCandidatesPaged attempt ' + attempt + ' ' + cron, 
-            cron, 
-            futureJob
+            )
         );
     }
 
@@ -454,20 +495,42 @@ public class GetCandidatesPaged implements Queueable, Database.AllowsCallouts {
     */
     private void cleanUpScheduledJobs(){
         /*
-        * Get a list of all scheduled job that have a name as those we set on this class for future
-        * attempts, that have already ran once, and are not scheduled to run again.
+        * Get all scheduled job that have a name as those we set on this class for future
+        * attempts, that have already ran once, and are not scheduled to run again, and abort them
         */
-        List<CronTrigger> previousJobs = [
-            SELECT Id
-            FROM CronTrigger
-            WHERE CronJobDetail.JobType = '7'
-            AND CronJobDetail.Name LIKE 'GetCandidatesPaged attempt%'
-            AND NextFireTime = NULL
-            AND TimesTriggered = 1
-        ];
-
-        for (CronTrigger job : previousJobs) {
+        for (CronTrigger job : [
+                                SELECT Id
+                                FROM CronTrigger
+                                WHERE CronJobDetail.JobType = '7'
+                                AND CronJobDetail.Name LIKE 'GetCandidatesPaged attempt%'
+                                AND NextFireTime = NULL
+                                AND TimesTriggered = 1
+                                ]
+        ) {
             System.abortJob(job.Id);
+        }
+    }
+
+    /*
+    * Manage the PagingAggregator estimated size so the aggregated information does not cause
+    * heap size limits to be exceeded. Get a max allowed heap size from custom metadata type to be
+    * alloted to the PagingAggregator. If the current Aggregator size surpasses this limit, flush
+    * its results into a Developer_Log__c containing partial results, then reinstantiate the
+    * Aggregator to a new one. Allow for the value to be set by the test context instead of the
+    * custom metadata type so it can be properly tested.
+    */
+    private void manageAggregatorSize() {
+
+        Double maxAggregatorSize = Callout_Setting__mdt.getInstance('Heroku_Datasource')
+                                                       .Max_PagingAggregator_Heap_Size__c;
+        if (Test.isRunningTest() && TestUtils.testMaxHeapSize != null) {
+            maxAggregatorSize = TestUtils.testMaxHeapSize;
+        }
+        maxAggregatorSize = maxAggregatorSize / 100;
+
+        if (this.aggregator.estHeapSize >= Limits.getLimitHeapSize() * maxAggregatorSize) {
+            logPartialResult();
+            this.aggregator = new PagingAggregator();
         }
     }
 }

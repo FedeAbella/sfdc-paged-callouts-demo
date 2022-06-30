@@ -38,21 +38,21 @@ public class GetCandidatesBatch implements Database.Batchable<sObject>, Database
     * That way we can, at the end of the entire job, create an informational log with accumulated
     * data.
     */
-    private Integer receivedCandidates; //  Keeps track of total received candidate data
-    private Integer candidatesWithErrors; //  Keeps track of total candidates not-upserted (w/error)
-    private Integer upsertedCandidates; //  Keeps track of total upserted candidates
-    private Integer insertedCandidates; //  Keeps track of total inserted candidates
-    private Integer updatedCandidates; //  Keeps track of total updated candidates
+    private Integer received; //  Keeps track of total received candidate data
+    private Integer withErrors; //  Keeps track of total candidates not-upserted (w/error)
+    private Integer upserted; //  Keeps track of total upserted candidates
+    private Integer inserted; //  Keeps track of total inserted candidates
+    private Integer updated; //  Keeps track of total updated candidates
     private List<String> upsertErrors; //  Keeps a log of upsert errors found across all batches
 
     //  CONSTRUCTOR
     public GetCandidatesBatch(CandidatesCallout.Sizes size) {
         this.size = size;
-        this.receivedCandidates = 0;
-        this.candidatesWithErrors = 0;
-        this.upsertedCandidates = 0;
-        this.insertedCandidates = 0;
-        this.updatedCandidates = 0;
+        this.received = 0;
+        this.withErrors = 0;
+        this.upserted = 0;
+        this.inserted = 0;
+        this.updated = 0;
         this.upsertErrors = new List<String>();
     }
 
@@ -87,7 +87,7 @@ public class GetCandidatesBatch implements Database.Batchable<sObject>, Database
         */
 
         //  Update the total number of received candidates
-        this.receivedCandidates += candidatesBatch.size(); 
+        this.received += candidatesBatch.size(); 
 
         /*
         * Upsert the records using the External_ID__c field as identifier. Return any errors found,
@@ -103,7 +103,7 @@ public class GetCandidatesBatch implements Database.Batchable<sObject>, Database
         */
         for (Database.UpsertResult result : upsertResults) {
             if (!result.isSuccess()) {
-                this.candidatesWithErrors += 1;
+                this.withErrors += 1;
                 String errorMessage = 'Errors during upsert: '
                     + JSON.serialize(
                         candidatesBatch.get(
@@ -119,11 +119,11 @@ public class GetCandidatesBatch implements Database.Batchable<sObject>, Database
                 }
                 this.upsertErrors.add(errorMessage);
             } else {
-                this.upsertedCandidates += 1;
+                this.upserted += 1;
                 if (result.isCreated()) {
-                    this.insertedCandidates += 1;
+                    this.inserted += 1;
                 } else {
-                    this.updatedCandidates += 1;
+                    this.updated += 1;
                 }
             }
         }
@@ -146,11 +146,11 @@ public class GetCandidatesBatch implements Database.Batchable<sObject>, Database
         DeveloperLogHandler.createDevLog(
             logType,
             'GetCandidatesBatch Finished: ' + System.now(), 
-            'Received Candidates: ' + this.receivedCandidates + '\n'
-            + 'Candidates with Errors: ' + this.candidatesWithErrors + '\n'
-            + 'Upserted Candidates: ' + this.upsertedCandidates + '\n'
-            + 'Inserted Candidates: ' + this.insertedCandidates + '\n'
-            + 'Updated Candidates: ' + this.updatedCandidates + '\n'
+            'Received Candidates: ' + this.received + '\n'
+            + 'Candidates with Errors: ' + this.withErrors + '\n'
+            + 'Upserted Candidates: ' + this.upserted + '\n'
+            + 'Inserted Candidates: ' + this.inserted + '\n'
+            + 'Updated Candidates: ' + this.updated + '\n'
             + errorMessage
         );
         

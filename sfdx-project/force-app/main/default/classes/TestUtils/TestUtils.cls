@@ -96,4 +96,10 @@ public class TestUtils {
     * in tests, bypassing the actual values used in the custom metadata type
     */
     public static Integer testDelay;
+
+    /*
+    * testMaxHeapSize public attribute, used to set and get values for Max Allowed PagingAggregator
+    * Heap Size in test, bypassing the actual value used in the custom metadata type
+    */
+    public static Double testMaxHeapSize; 
 }
