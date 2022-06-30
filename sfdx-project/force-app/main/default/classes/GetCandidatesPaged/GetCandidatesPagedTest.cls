@@ -605,16 +605,24 @@ private class GetCandidatesPagedTest {
     @IsTest
     static void testPagingAggregatorBeyondAllowedSize(){
 
+        //  Insert 500 Candidates, and modify all of them to make External_ID__c invalid
+        List<Candidate__c> candidates = TestUtils.makeCandidates(200);
+        insert candidates;
+
+        for (Candidate__c c: candidates) {
+            c.External_ID__c = '0'.repeat(20);
+        }
+
         Test.startTest();
             //  Override the value for max allowed heap size taken by PagingAggregator
-            TestUtils.testMaxHeapSize = 0;
+            TestUtils.testMaxHeapSize = 0.1;
             Test.setMock(
                 HttpCalloutMock.class, 
-                new CandidatesCalloutMock(5000)
+                new CandidatesCalloutMock(candidates)
             );
 
             GetCandidatesPaged queueableJob = new GetCandidatesPaged(
-                new GetCandidatesPaged.PagingAggregator(), 1, 5000, 1, 1, false,
+                new GetCandidatesPaged.PagingAggregator(), 1, 200, 1, 1, false,
                 CandidatesCallout.Sizes.COMPLETE
             );
             System.enqueueJob(queueableJob);
@@ -629,13 +637,6 @@ private class GetCandidatesPagedTest {
         System.assertEquals(1, jobsList.size());
         System.assertEquals('GetCandidatesPaged', jobsList[0].ApexClass.Name);
         System.assertEquals('Completed', jobsList[0].Status);
-
-        //  Assert the correct number of candidates were inserted
-        Integer numCandidates = [
-            SELECT COUNT()
-            FROM Candidate__c
-        ];
-        System.assertEquals(5000, numCandidates);
 
         /*
         * Assert the partial results were flushed and a Developer_Log__c was created, even though
@@ -655,6 +656,11 @@ private class GetCandidatesPagedTest {
         System.assert(
             logsList[0].Message__c.startsWith(
                 'GetCandidatesPaged class flushed partial result because of Aggregator Size'
+            )
+        );
+        System.assert(
+            logsList[0].Message__c.contains(
+                'Candidates with Errors: 200'
             )
         );
     }
