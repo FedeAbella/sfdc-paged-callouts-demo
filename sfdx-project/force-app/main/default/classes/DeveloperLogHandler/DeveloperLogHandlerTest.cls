@@ -44,4 +44,32 @@ private class DeveloperLogHandlerTest {
             logsList[0].Message__c
         );
     }
+
+    @IsTest
+    static void testCreateSplitLog(){
+        
+        Integer fieldSize = Developer_Log__c.Message__c.getDescribe().getLength();
+
+        Test.startTest();
+            DeveloperLogHandler.createDevLog(
+                DeveloperLogHandler.LogType.INFO, 
+                'Split log test', 
+                'a'.repeat(fieldsize + 1)
+            );
+        Test.stopTest();
+
+        List<Developer_Log__c> logsList = [
+            SELECT Type__c, Name, Message__c
+            FROM Developer_Log__c
+            ORDER BY Name ASC
+        ];
+
+        System.assertEquals(2, logsList.size());
+        System.assert(
+            logsList[0].Name.contains('(1/2)')
+        );
+        System.assert(
+            logsList[1].Name.contains('(2/2)')
+        );
+    }
 }
