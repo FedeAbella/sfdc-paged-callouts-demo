@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ValidationRule xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Avoid_over_30_Max_PagingAggregator_Size</fullName>
+    <active>true</active>
+    <description>Max PagingAggregator Heap Size should not go above 30% of total Heap Size. During a single transaction, the PagingAggregator size is doubled in use while writing its contents into a Developer_Log__c before flushing.</description>
+    <errorConditionFormula>Max_PagingAggregator_Heap_Size__c &gt; 0.3</errorConditionFormula>
+    <errorDisplayField>Max_PagingAggregator_Heap_Size__c</errorDisplayField>
+    <errorMessage>Max Paging Aggregator Heap Size should be 30% or lower.</errorMessage>
+</ValidationRule>

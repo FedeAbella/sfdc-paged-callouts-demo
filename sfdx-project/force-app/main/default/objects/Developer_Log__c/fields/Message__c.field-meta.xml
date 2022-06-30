@@ -4,7 +4,7 @@
     <description>A complete message describing the log</description>
     <externalId>false</externalId>
     <label>Message</label>
-    <length>32768</length>
+    <length>130000</length>
     <trackTrending>false</trackTrending>
     <type>LongTextArea</type>
     <visibleLines>3</visibleLines>

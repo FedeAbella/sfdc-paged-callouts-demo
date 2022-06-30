@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Max_PagingAggregator_Heap_Size__c</fullName>
+    <description>Percentage of max heap size to be allotted to the PagingAggregator during paged callouts. If when attempting to instantiate a new callout the PagingAggregator goes beyond this limit, it is instead flushed into a Developer_Log__c and a new one is instantiated in its place.</description>
+    <externalId>false</externalId>
+    <fieldManageability>DeveloperControlled</fieldManageability>
+    <label>Max PagingAggregator Heap Size</label>
+    <precision>3</precision>
+    <required>false</required>
+    <scale>1</scale>
+    <type>Percent</type>
+</CustomField>

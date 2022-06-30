@@ -14,4 +14,8 @@
         <field>Max_Paged_Attempts__c</field>
         <value xsi:type="xsd:double">3.0</value>
     </values>
+    <values>
+        <field>Max_PagingAggregator_Heap_Size__c</field>
+        <value xsi:type="xsd:double">30.0</value>
+    </values>
 </CustomMetadata>

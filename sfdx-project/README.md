@@ -29,10 +29,11 @@ Objects come with their Tabs, layouts, and List Views, no need to detail on thos
 	- The base URL for the Heroku app
 	- The maximum number of allowed re-tries on failed callouts, before we give up
 	- A delay in seconds to wait before re-trying after a failed callout. See more about this in the `GetCandidatesPaged` class
+	- A maximum size for the `PagingAggregator` (more on that later), expressed as a percentage of total heap size
 
 ### The Apex Classes
 
-- `DeveloperLogHandler` simply outsources creating a new `Developer_Log__c` record, since we're doing a lot of that to keep our Admins informed on how processes went, so it's useful to keep it handy in a single method. Also helps with readability in other classes. The class has an Enum to enforce the `Type__c` picklist values.
+- `DeveloperLogHandler` simply outsources creating a new `Developer_Log__c` record, since we're doing a lot of that to keep our Admins informed on how processes went, so it's useful to keep it handy in a single method. Also helps with readability in other classes. The class has an Enum to enforce the `Type__c` picklist values. Because we may be writing very long log messages as we page through possibly many callouts, it also handles breaking up messages too long to fit into only one record (as restricted by the `Message__c` field size)
 - `TestUtils` just has some useful methos for creating or transforming data for use in tests. It's always handy to keep one of this around.
 
 Ok, now onto the important ones:
@@ -43,6 +44,8 @@ Ok, now onto the important ones:
 
 #### The Paging Aggregator
 This is an inner class that works the same as the instance variables in the `GetCandidatesBatch` do. It's entire purpose is to aggregate data as we move through different pages, keeping track of totals, database errors, and callout results. Since every new Queueable class in the chain is an entire new instance, instance variables as used in `GetCandidatesBatch` just won't cut it. However, passing around the same instance of the `PagingAggregator` allows links in the chain to pass information to those coming after them. I like to think of it as runners in a relay race, passing forward the baton. If that also works for you, awesome!
+
+If you're wondering whether writing some data on each callout and then passing all that around won't make this keep growing in size until the `PagingAggregator` itself might become an issue regarding heap size, you're not alone! (or, you've been paying attention on the earlier definition of the `Callout_Setting__mdt`). Sure, that can definitely become an issue if you've got too many pages, too many failed callout attempts, or are just writing too much information to the `PagingAggregator` on each transaction. So how do we avoid our solution becoming the same problem we're trying to solve? Well, that's were that field in the `Callout_Setting__mdt` custom metadata type comes in. We'll define a maximum size the `PagingAggregator` can grow to, as a percentage of total heap size. If we're about to pass a `PagingAggregator` larger than this into a new transaction, instead we'll write that information into a 'partial result' `Developer_Log__c`, and instantiate a new, empty `PagingAggregator` in its place.
 
 #### Attempting a Callout
 The class uses `CandidatesCallout` to attempt the callout and receive a list of Candidate data. This can either:
@@ -74,7 +77,7 @@ Wow! So, chaining queueables sounds nice, and there's nothing stopping us from c
 So, as far as chained queueables go, one thing to keep in mind. **And it's an important one:** If you're working in a sandbox environment, or in a Developer Edition org, then chained queueables are **NOT** infinite. You're limited to a stack depth of 5, and after that you're getting one of those not-so-nice, uncatchable governor limit Exceptions. And even if you're on one of those, Salesforce will throttle your queueable speed after the stack depth has reached 5, so future jobs will run *a lot slower*. (Though [that seems to have been sped up recently, though it's not documented anywhere](https://twitter.com/FishOfPrey/status/1493383965327380480)).
 
 ### Doesn't that defeat the entire purpose of this demo then?
-Well, not quite. Give me some credit here. I'm about 1950 words into this README, and I wouldn't be here if this was it. Remember how we're scheduling new attempts some time into the future to give the external system some breathing room before re-trying the same page? Well, turns out when we do that, we're also breaking up the stack depth of chained queueables. We're no calling a new queueable from our class, after all. We're calling a schedulable class, which by itself will enqueue a new job. And that's all we need. Once we get to a stack depth of 5, we'll break the chain, postpone our next page for a few seconds, and reset the counter. No throttling here. So we're going for a `Q-Q-Q-Q-Q- S - Q-Q...` pattern here. You'll fine some other devs around taking about a `Q-Q-Q-Q-Q- F -Q-Q...` pattern, using `@future` methods to break up queueable chains instead. But we've already got a Schedulable class doing some work for us, so why not use it?
+Well, not quite. Give me some credit here. I'm over 2000 words into this README, and I wouldn't be here if this was it. Remember how we're scheduling new attempts some time into the future to give the external system some breathing room before re-trying the same page? Well, turns out when we do that, we're also breaking up the stack depth of chained queueables. We're no calling a new queueable from our class, after all. We're calling a schedulable class, which by itself will enqueue a new job. And that's all we need. Once we get to a stack depth of 5, we'll break the chain, postpone our next page for a few seconds, and reset the counter. No throttling here. So we're going for a `Q-Q-Q-Q-Q- S - Q-Q...` pattern here. You'll fine some other devs around taking about a `Q-Q-Q-Q-Q- F -Q-Q...` pattern, using `@future` methods to break up queueable chains instead. But we've already got a Schedulable class doing some work for us, so why not use it?
 
 <a name="TryIt"/>
 
