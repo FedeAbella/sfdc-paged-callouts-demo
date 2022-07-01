@@ -34,7 +34,7 @@ PARTIAL_SIZES = {
     'complete': 1
 }
 
-FAILURE_PROB = 0.3 # Probabiliy that a call to the 'faulty' endpoint fails
+FAILURE_PROB = 0.2 # Probabiliy that a call to the 'faulty' endpoint fails
 seed(a=None) # Initialize random to current time
 
 @app.route('/data', methods=['GET'])
